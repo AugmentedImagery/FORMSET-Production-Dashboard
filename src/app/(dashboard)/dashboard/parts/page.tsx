@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useParts, useProducts, useUpdatePart, useCreatePart, useDeletePart, useCreateProduct, useDeleteProduct, PartWithProduct, UpdatePartInput } from '@/hooks/useParts';
+import { useState, useRef } from 'react';
+import Image from 'next/image';
+import { useParts, useProducts, useUpdatePart, useCreatePart, useDeletePart, useCreateProduct, useDeleteProduct, useUploadProductImage, PartWithProduct, UpdatePartInput } from '@/hooks/useParts';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -55,8 +56,8 @@ import {
   Trash2,
   Copy,
   ShoppingBag,
-  ChevronDown,
-  ChevronUp,
+  Upload,
+  ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CreatePartInput, CreateProductInput, Product, ProductType } from '@/types/database';
@@ -591,7 +592,8 @@ export default function PartsPage() {
   const [deletingPart, setDeletingPart] = useState<PartWithProduct | null>(null);
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
-  const [showProducts, setShowProducts] = useState(false);
+  const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { canEdit } = useAuth();
   const { data: parts, isLoading } = useParts();
   const { data: products } = useProducts();
@@ -600,6 +602,7 @@ export default function PartsPage() {
   const deletePart = useDeletePart();
   const createProduct = useCreateProduct();
   const deleteProduct = useDeleteProduct();
+  const uploadProductImage = useUploadProductImage();
 
   const handleSavePart = async (data: Parameters<typeof updatePart.mutateAsync>[0]) => {
     try {
@@ -683,6 +686,36 @@ export default function PartsPage() {
     }
   };
 
+  const handleImageUpload = async (productId: string, file: File) => {
+    setUploadingProductId(productId);
+    try {
+      await uploadProductImage.mutateAsync({ productId, file });
+      toast.success('Product image uploaded successfully');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload image';
+      toast.error(message);
+      console.error('Failed to upload image:', error);
+    } finally {
+      setUploadingProductId(null);
+    }
+  };
+
+  const triggerFileUpload = (productId: string) => {
+    setUploadingProductId(productId);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && uploadingProductId) {
+      handleImageUpload(uploadingProductId, file);
+    }
+    // Reset the input
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
   // Count parts per product (parts can belong to multiple products)
   const getPartsCountForProduct = (productId: string) => {
     return parts?.filter(p => p.products?.some(prod => prod.id === productId)).length || 0;
@@ -748,22 +781,23 @@ export default function PartsPage() {
         )}
       </div>
 
+      {/* Hidden file input for image uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* Products Management Section */}
       <Card>
         <CardHeader className="py-3">
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => setShowProducts(!showProducts)}
-              className="flex items-center gap-2 hover:text-gray-600"
-            >
+            <div className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5" />
               <CardTitle className="text-base">Products ({products?.length || 0})</CardTitle>
-              {showProducts ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
-            </button>
+            </div>
             {canEdit && (
               <Button size="sm" onClick={() => setIsAddProductDialogOpen(true)}>
                 <Plus className="mr-1 h-4 w-4" />
@@ -772,56 +806,90 @@ export default function PartsPage() {
             )}
           </div>
         </CardHeader>
-        {showProducts && (
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {products?.map((product) => {
-                const partsCount = getPartsCountForProduct(product.id);
-                return (
-                  <div
-                    key={product.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900 truncate">{product.name}</span>
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
-                          {product.type}
-                        </Badge>
+        <CardContent className="pt-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {products?.map((product) => {
+              const partsCount = getPartsCountForProduct(product.id);
+              const isUploading = uploadingProductId === product.id && uploadProductImage.isPending;
+              return (
+                <div
+                  key={product.id}
+                  className="flex gap-3 p-3 bg-gray-50 rounded-lg border"
+                >
+                  {/* Product Image */}
+                  <div className="relative shrink-0">
+                    {product.image_url ? (
+                      <div className="relative h-16 w-16 rounded-lg overflow-hidden bg-white border">
+                        <Image
+                          src={product.image_url}
+                          alt={product.name}
+                          fill
+                          className="object-cover"
+                        />
                       </div>
-                      <div className="text-sm text-gray-500 flex items-center gap-2">
-                        {product.sku && <span>SKU: {product.sku}</span>}
-                        <span>{partsCount} part{partsCount !== 1 ? 's' : ''}</span>
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg bg-gray-200 flex items-center justify-center border">
+                        <ImageIcon className="h-6 w-6 text-gray-400" />
                       </div>
-                    </div>
+                    )}
                     {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDeletingProduct(product)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 ml-2"
-                        title="Delete product"
-                        disabled={partsCount > 0}
+                      <button
+                        onClick={() => triggerFileUpload(product.id)}
+                        disabled={isUploading}
+                        className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50"
+                        title="Upload image"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        {isUploading ? (
+                          <Loader2 className="h-3 w-3 animate-spin text-gray-500" />
+                        ) : (
+                          <Upload className="h-3 w-3 text-gray-500" />
+                        )}
+                      </button>
                     )}
                   </div>
-                );
-              })}
-              {products?.length === 0 && (
-                <div className="col-span-full text-center py-4 text-gray-500">
-                  No products yet. Add a product to get started.
+
+                  {/* Product Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900 truncate">{product.name}</span>
+                      <Badge variant="secondary" className="bg-gray-100 text-gray-700">
+                        {product.type}
+                      </Badge>
+                    </div>
+                    <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                      {product.sku && <span>SKU: {product.sku}</span>}
+                      <span>{partsCount} part{partsCount !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+
+                  {/* Delete Button */}
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeletingProduct(product)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 self-start"
+                      title="Delete product"
+                      disabled={partsCount > 0}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
-              )}
-            </div>
-            {products && products.some(p => getPartsCountForProduct(p.id) > 0) && (
-              <p className="text-xs text-gray-400 mt-3">
-                Note: Products with parts cannot be deleted. Remove all parts first.
-              </p>
+              );
+            })}
+            {products?.length === 0 && (
+              <div className="col-span-full text-center py-4 text-gray-500">
+                No products yet. Add a product to get started.
+              </div>
             )}
-          </CardContent>
-        )}
+          </div>
+          {products && products.some(p => getPartsCountForProduct(p.id) > 0) && (
+            <p className="text-xs text-gray-400 mt-3">
+              Note: Products with parts cannot be deleted. Remove all parts first.
+            </p>
+          )}
+        </CardContent>
       </Card>
 
       {/* Filters */}

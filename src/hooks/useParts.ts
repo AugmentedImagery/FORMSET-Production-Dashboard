@@ -307,6 +307,50 @@ export function useDeleteProduct() {
   });
 }
 
+export function useUploadProductImage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ productId, file }: { productId: string; file: File }) => {
+      const supabase = createClient();
+
+      // Generate a unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${productId}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Upload to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('product-photos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-photos')
+        .getPublicUrl(filePath);
+
+      // Update the product with the new image URL
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ image_url: publicUrl })
+        .eq('id', productId);
+
+      if (updateError) throw updateError;
+
+      return { productId, imageUrl: publicUrl };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['parts'] });
+    },
+  });
+}
+
 // Helper hook to get parts for a specific product (via junction table)
 export function usePartsForProduct(productId: string) {
   return useQuery({

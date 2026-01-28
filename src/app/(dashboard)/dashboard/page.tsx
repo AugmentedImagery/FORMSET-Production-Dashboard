@@ -23,22 +23,38 @@ function DashboardSkeleton() {
 
       {/* Content skeleton */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-gray-100">
-          <Skeleton className="h-6 w-40 mb-6" />
-          <div className="space-y-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i}>
-                <Skeleton className="h-4 w-48 mb-2" />
-                <Skeleton className="h-3 w-32 mb-2" />
-                <Skeleton className="h-2.5 w-full" />
-              </div>
-            ))}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-xl p-6 border border-gray-100">
+            <Skeleton className="h-6 w-40 mb-6" />
+            <div className="space-y-6">
+              {[...Array(3)].map((_, i) => (
+                <div key={i}>
+                  <Skeleton className="h-4 w-48 mb-2" />
+                  <Skeleton className="h-3 w-32 mb-2" />
+                  <Skeleton className="h-2.5 w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-6 border border-gray-100">
+            <Skeleton className="h-6 w-36 mb-6" />
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-12 w-12 rounded-lg" />
+                  <div className="flex-1">
+                    <Skeleton className="h-4 w-32 mb-2" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
         <div className="bg-white rounded-xl p-6 border border-gray-100">
           <Skeleton className="h-6 w-32 mb-6" />
           <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
+            {[...Array(5)].map((_, i) => (
               <div key={i} className="flex justify-between">
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-4 w-8" />
@@ -93,18 +109,18 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Production Queue and Stock Levels side by side */}
+      {/* Production Queue, Recent Orders, and Stock Levels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        {/* Left column: Production Queue + Recent Orders stacked */}
+        <div className="lg:col-span-2 space-y-6">
           <ProductionTimeline jobs={stats?.activeJobs || []} />
+          <RecentOrders orders={stats?.recentOrders || []} />
         </div>
+        {/* Right column: Stock Levels */}
         <div>
           <StockLevels items={stats?.stockLevels || []} />
         </div>
       </div>
-
-      {/* Recent Orders at bottom */}
-      <RecentOrders orders={stats?.recentOrders || []} />
     </div>
   );
 }
