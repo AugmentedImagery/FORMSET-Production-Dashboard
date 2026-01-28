@@ -265,8 +265,8 @@ export default function PrintersPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Printer className="h-6 w-6 text-blue-600" />
+            <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center">
+              <Printer className="h-6 w-6 text-gray-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Printers</p>
@@ -287,8 +287,8 @@ export default function PrintersPage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Play className="h-6 w-6 text-blue-600" />
+            <div className="h-12 w-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(153, 145, 132, 0.2)' }}>
+              <Play className="h-6 w-6" style={{ color: '#999184' }} />
             </div>
             <div>
               <p className="text-sm text-gray-500">Printing</p>
@@ -433,15 +433,15 @@ export default function PrintersPage() {
       )}
 
       {/* Bambu Labs integration notice */}
-      <Card className="bg-blue-50 border-blue-200">
+      <Card className="bg-gray-50 border-gray-200">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <Printer className="h-5 w-5 text-blue-600" />
+            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <Printer className="h-5 w-5 text-gray-600" />
             </div>
             <div>
-              <p className="font-medium text-blue-900">Bambu Labs Integration</p>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="font-medium text-gray-900">Bambu Labs Integration</p>
+              <p className="text-sm text-gray-600 mt-1">
                 Automatic printer status tracking and print completion logging will be available in a future update. For now, manually update printer status and log prints from the order detail page.
               </p>
             </div>

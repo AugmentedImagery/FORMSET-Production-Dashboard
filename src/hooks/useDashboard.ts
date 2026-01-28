@@ -43,22 +43,36 @@ export function useDashboardStats() {
         sum + (h.quantity || 1), 0) || 0;
       const printSuccessRate = totalPrints > 0 ? (successCount / totalPrints) * 100 : 100;
 
-      // Get low stock parts
-      const { data: lowStockData, error: lowStockError } = await supabase
+      // Get inventory with part names for stock levels display
+      const { data: inventoryData, error: inventoryError } = await supabase
         .from('inventory')
         .select(`
           *,
           part:parts(*)
-        `);
+        `)
+        .order('quantity_on_hand', { ascending: true })
+        .limit(10);
 
-      if (lowStockError) throw lowStockError;
+      if (inventoryError) throw inventoryError;
 
       interface InventoryWithPart {
+        id: string;
         quantity_on_hand: number;
         quantity_reserved: number;
         part: Part | null;
       }
-      const lowStockParts = (lowStockData || [])
+
+      // Stock levels for display (top parts by name)
+      const stockLevels = (inventoryData || [])
+        .filter((inv: InventoryWithPart) => inv.part)
+        .map((inv: InventoryWithPart) => ({
+          id: inv.id,
+          name: inv.part?.name || 'Unknown',
+          quantity: inv.quantity_on_hand,
+        }));
+
+      // Low stock parts (keep for alerts)
+      const lowStockParts = (inventoryData || [])
         .filter((inv: InventoryWithPart) => {
           const available = inv.quantity_on_hand - inv.quantity_reserved;
           return available < (inv.part?.low_stock_threshold || 0);
@@ -97,6 +111,7 @@ export function useDashboardStats() {
         totalPartsInStock,
         printSuccessRate,
         lowStockParts,
+        stockLevels,
         recentOrders: recentOrders as ProductionOrder[],
         activeJobs: activeJobs as PrintJob[],
       };

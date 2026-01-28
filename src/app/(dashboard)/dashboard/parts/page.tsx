@@ -152,9 +152,7 @@ function EditPartDialog({ open, onClose, part, products, onSave, isPending }: Ed
                     onClick={() => toggleProduct(product.id)}
                     className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                       isSelected
-                        ? product.type === 'kiosk'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-green-500 text-white'
+                        ? 'bg-[#999184] text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -367,9 +365,7 @@ function AddPartDialog({ open, onClose, products, onSave, isPending }: AddPartDi
                     onClick={() => toggleProduct(product.id)}
                     className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                       isSelected
-                        ? product.type === 'kiosk'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-green-500 text-white'
+                        ? 'bg-[#999184] text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -789,11 +785,7 @@ export default function PartsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900 truncate">{product.name}</span>
-                        <Badge variant="secondary" className={
-                          product.type === 'kiosk'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-green-100 text-green-700'
-                        }>
+                        <Badge variant="secondary" className="bg-gray-100 text-gray-700">
                           {product.type}
                         </Badge>
                       </div>
@@ -935,11 +927,7 @@ export default function PartsPage() {
                           <Badge
                             key={prod.id}
                             variant="secondary"
-                            className={
-                              prod.type === 'kiosk'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-green-100 text-green-700'
-                            }
+                            className="bg-gray-100 text-gray-700"
                           >
                             {prod.name}
                           </Badge>

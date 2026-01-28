@@ -155,12 +155,19 @@ export interface InventoryAdjustment {
 }
 
 // Dashboard Stats Types
+export interface StockLevel {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
 export interface DashboardStats {
   pendingOrders: number;
   inProductionOrders: number;
   totalPartsInStock: number;
   printSuccessRate: number;
   lowStockParts: Part[];
+  stockLevels: StockLevel[];
   recentOrders: ProductionOrder[];
   activeJobs: PrintJob[];
 }

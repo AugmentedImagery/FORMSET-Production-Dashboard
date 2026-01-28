@@ -195,8 +195,8 @@ export default function InventoryPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Package className="h-6 w-6 text-blue-600" />
+            <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center">
+              <Package className="h-6 w-6 text-gray-600" />
             </div>
             <div>
               <p className="text-sm text-gray-500">Total Parts</p>
@@ -290,11 +290,7 @@ export default function InventoryPage() {
                           <Badge
                             key={prod.id}
                             variant="secondary"
-                            className={
-                              prod.type === 'kiosk'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-green-100 text-green-700'
-                            }
+                            className="bg-gray-100 text-gray-700"
                           >
                             {prod.name}
                           </Badge>

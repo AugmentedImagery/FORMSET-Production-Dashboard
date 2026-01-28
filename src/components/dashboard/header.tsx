@@ -12,9 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
-import { Bell, LogOut, User, Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { LogOut, User, Search } from 'lucide-react';
 
 export function Header() {
   const { user, profile, role, signOut } = useAuth();
@@ -22,7 +20,6 @@ export function Header() {
 
   const handleSignOut = async () => {
     await signOut();
-    // Navigate to login using client-side routing
     router.push('/login');
   };
 
@@ -38,55 +35,37 @@ export function Header() {
     return email?.slice(0, 2).toUpperCase() || 'U';
   };
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-red-100 text-red-700';
-      case 'manager':
-        return 'bg-blue-100 text-blue-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
-
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
+    <header className="flex h-16 items-center justify-between bg-[#1a1a1a] px-6">
       {/* Search */}
-      <div className="flex items-center gap-4 flex-1 max-w-md">
+      <div className="flex items-center flex-1 max-w-xl">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+          <input
             type="search"
             placeholder="Search orders, parts..."
-            className="pl-10 bg-gray-50 border-gray-200"
+            className="w-full h-10 pl-11 pr-4 bg-[#2a2a2a] border border-white/10 rounded-full text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent"
           />
         </div>
       </div>
 
-      {/* Right side */}
-      <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-gray-500" />
-          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
-        </Button>
-
-        {/* User Menu */}
+      {/* Right side - User profile */}
+      <div className="flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-3 pl-2 pr-3">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-blue-100 text-blue-700 text-sm font-medium">
+            <Button variant="ghost" className="flex items-center gap-3 px-2 hover:bg-white/5">
+              <Avatar className="h-9 w-9 border-2 border-white/20">
+                <AvatarFallback className="bg-white/10 text-white text-sm font-medium">
                   {getInitials(profile?.full_name, user?.email)}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start">
-                <span className="text-sm font-medium text-gray-900">
-                  {profile?.full_name || user?.email?.split('@')[0]}
+                <span className="text-sm font-semibold text-white">
+                  {profile?.full_name || user?.email?.split('@')[0] || 'User'}
                 </span>
-                <Badge variant="secondary" className={`text-xs px-1.5 py-0 ${getRoleBadgeColor(role)}`}>
+                <span className="text-xs font-medium px-2 py-0.5 rounded bg-[#999184] text-white">
                   {role}
-                </Badge>
+                </span>
               </div>
             </Button>
           </DropdownMenuTrigger>

@@ -436,7 +436,7 @@ export default function OrdersPage() {
                       <TableCell>
                         <Link
                           href={`/dashboard/orders/${order.id}`}
-                          className="font-mono text-sm text-blue-600 hover:underline"
+                          className="font-mono text-sm text-gray-700 hover:text-gray-900 hover:underline"
                         >
                           {order.shopify_order_number || order.id.slice(0, 8)}
                         </Link>
@@ -448,12 +448,12 @@ export default function OrdersPage() {
                         <div className="flex items-center gap-2">
                           {order.source === 'shopify' ? (
                             <>
-                              <ShoppingBag className="h-4 w-4 text-green-600" />
+                              <ShoppingBag className="h-4 w-4 text-gray-500" />
                               <span className="text-sm">Shopify</span>
                             </>
                           ) : (
                             <>
-                              <Building2 className="h-4 w-4 text-blue-600" />
+                              <Building2 className="h-4 w-4 text-gray-500" />
                               <span className="text-sm">Internal</span>
                             </>
                           )}

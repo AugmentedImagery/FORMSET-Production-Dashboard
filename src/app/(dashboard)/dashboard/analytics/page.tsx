@@ -121,8 +121,8 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-gray-500">Total Prints</p>
                 <p className="text-2xl font-bold">{totalPrints}</p>
               </div>
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <BarChart3 className="h-5 w-5 text-blue-600" />
+              <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                <BarChart3 className="h-5 w-5 text-gray-600" />
               </div>
             </div>
           </CardContent>

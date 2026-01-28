@@ -13,7 +13,7 @@ export default function DashboardLayout({
 }) {
   return (
     <QueryProvider>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen bg-[#fafafa]">
         {/* Sidebar */}
         <Sidebar />
 

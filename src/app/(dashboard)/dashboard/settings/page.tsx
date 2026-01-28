@@ -53,9 +53,9 @@ export default function SettingsPage() {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin':
-        return 'bg-red-100 text-red-700';
+        return 'bg-[#999184]/20 text-[#7a756a]';
       case 'manager':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-[#999184]/20 text-[#7a756a]';
       default:
         return 'bg-gray-100 text-gray-700';
     }
@@ -144,8 +144,8 @@ export default function SettingsPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                    <ShoppingBag className="h-5 w-5 text-green-600" />
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <ShoppingBag className="h-5 w-5 text-gray-600" />
                   </div>
                   <div>
                     <CardTitle>Shopify</CardTitle>
@@ -178,7 +178,7 @@ export default function SettingsPage() {
                       onChange={(e) => setShopifyDomain(e.target.value)}
                     />
                   </div>
-                  <div className="p-4 bg-blue-50 rounded-lg text-sm text-blue-800">
+                  <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-700">
                     <p className="font-medium mb-2">Setup Instructions:</p>
                     <ol className="list-decimal list-inside space-y-1">
                       <li>Go to your Shopify Admin &gt; Settings &gt; Apps and sales channels</li>
@@ -216,8 +216,8 @@ export default function SettingsPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <Printer className="h-5 w-5 text-blue-600" />
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <Printer className="h-5 w-5 text-gray-600" />
                   </div>
                   <div>
                     <CardTitle>Bambu Labs Cloud</CardTitle>
@@ -263,11 +263,11 @@ export default function SettingsPage() {
                   <p className="font-medium mb-2">Role Permissions:</p>
                   <div className="space-y-3">
                     <div className="flex items-start gap-3">
-                      <Badge className="bg-red-100 text-red-700 mt-0.5">Admin</Badge>
+                      <Badge className="bg-[#999184]/20 text-[#7a756a] mt-0.5">Admin</Badge>
                       <p>Full access. Can manage users, delete data, and configure integrations.</p>
                     </div>
                     <div className="flex items-start gap-3">
-                      <Badge className="bg-blue-100 text-blue-700 mt-0.5">Manager</Badge>
+                      <Badge className="bg-[#999184]/20 text-[#7a756a] mt-0.5">Manager</Badge>
                       <p>Can create orders, log prints, update inventory, and manage printers.</p>
                     </div>
                     <div className="flex items-start gap-3">
