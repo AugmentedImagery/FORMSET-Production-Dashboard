@@ -337,7 +337,33 @@ export default function SchedulePage() {
                     ? Math.round((job.quantity_completed / job.quantity_needed) * 100)
                     : 0;
                   const remaining = job.quantity_needed - job.quantity_completed;
-                  const printTime = remaining * (job.part?.print_time_minutes || 60);
+
+                  // Calculate print cycles
+                  const partsPerPrint = job.part?.parts_per_print || 1;
+                  const printTimePerCycle = job.part?.print_time_minutes || 60;
+                  const totalPrintsNeeded = Math.ceil(job.quantity_needed / partsPerPrint);
+                  const printsCompleted = Math.floor(job.quantity_completed / partsPerPrint);
+                  const printsRemaining = Math.ceil(remaining / partsPerPrint);
+
+                  // Calculate prints for THIS specific day
+                  // Based on available working hours (8h = 480min per day) × number of printers
+                  const workingMinutesPerDay = 8 * 60;
+                  const printsPerPrinterPerDay = Math.floor(workingMinutesPerDay / printTimePerCycle);
+                  const numPrinters = Math.max(availablePrinters.length, 1);
+                  const totalPrintsPerDay = printsPerPrinterPerDay * numPrinters;
+
+                  // Calculate which day of the job this is
+                  const jobStartDay = startOfDay(job.scheduledDate);
+                  const selectedDay = startOfDay(selectedDate);
+                  const daysSinceJobStart = Math.floor((selectedDay.getTime() - jobStartDay.getTime()) / (1000 * 60 * 60 * 24));
+
+                  // Calculate prints already done in previous days of this job
+                  const printsDoneInPreviousDays = Math.min(daysSinceJobStart * totalPrintsPerDay, printsRemaining);
+                  const printsRemainingAfterPreviousDays = Math.max(0, printsRemaining - printsDoneInPreviousDays);
+
+                  // Prints scheduled for this specific day (across all printers)
+                  const printsForThisDay = Math.min(totalPrintsPerDay, printsRemainingAfterPreviousDays);
+                  const printTimeForThisDay = Math.ceil(printsForThisDay / numPrinters) * printTimePerCycle;
 
                   return (
                     <Link
@@ -375,22 +401,56 @@ export default function SchedulePage() {
                           {getPriorityBadge(job.production_order?.priority || 'normal')}
                         </div>
 
+                        {/* Parts progress */}
                         <div className="flex items-center justify-between text-gray-600">
-                          <span>Progress</span>
+                          <span>Parts Progress</span>
                           <span className="font-medium">
-                            {job.quantity_completed} / {job.quantity_needed}
+                            {job.quantity_completed} / {job.quantity_needed} parts
                           </span>
                         </div>
 
                         <Progress value={progress} className="h-2" />
 
+                        {/* Print cycles for THIS DAY */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 space-y-1">
+                          <div className="flex items-center justify-between text-blue-800">
+                            <span className="flex items-center gap-1 font-medium">
+                              <Printer className="h-3.5 w-3.5" />
+                              Prints for This Day
+                            </span>
+                            <span className="font-bold text-blue-900 text-lg">
+                              {printsForThisDay}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-blue-600">
+                            <span>~{formatPrintTime(printTimeForThisDay)} of printing</span>
+                            <span>{partsPerPrint * printsForThisDay} parts</span>
+                          </div>
+                        </div>
+
+                        {/* Total job progress */}
+                        <div className="bg-gray-100 rounded-lg p-2 space-y-1">
+                          <div className="flex items-center justify-between text-gray-700">
+                            <span className="text-xs">Total Job Progress</span>
+                            <span className="font-medium text-gray-900">
+                              {printsCompleted} / {totalPrintsNeeded} prints
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>{partsPerPrint} part{partsPerPrint !== 1 ? 's' : ''} per print</span>
+                            <span className="font-medium">
+                              {printsRemaining} print{printsRemaining !== 1 ? 's' : ''} remaining total
+                            </span>
+                          </div>
+                        </div>
+
                         <div className="flex items-center justify-between text-gray-600">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5" />
-                            Est. Time Remaining
+                            Total Time Remaining
                           </span>
                           <span className="font-medium">
-                            {formatPrintTime(printTime)}
+                            {formatPrintTime(printsRemaining * printTimePerCycle)}
                           </span>
                         </div>
 
