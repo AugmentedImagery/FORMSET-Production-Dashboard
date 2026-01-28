@@ -36,7 +36,7 @@ import {
   Legend,
 } from 'recharts';
 
-const COLORS = ['#22c55e', '#ef4444', '#f59e0b'];
+const COLORS = ['#22c55e', '#f97316', '#eab308'];
 
 export default function AnalyticsPage() {
   const [timeRange, setTimeRange] = useState('30');
@@ -135,12 +135,12 @@ export default function AnalyticsPage() {
                 <p className="text-2xl font-bold">{successRate}%</p>
               </div>
               <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                parseFloat(successRate) >= 90 ? 'bg-green-100' : 'bg-orange-100'
+                parseFloat(successRate) >= 90 ? 'bg-green-100' : 'bg-yellow-100'
               }`}>
                 {parseFloat(successRate) >= 90 ? (
                   <TrendingUp className="h-5 w-5 text-green-600" />
                 ) : (
-                  <TrendingDown className="h-5 w-5 text-orange-600" />
+                  <TrendingDown className="h-5 w-5 text-yellow-600" />
                 )}
               </div>
             </div>
@@ -164,10 +164,10 @@ export default function AnalyticsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Failed</p>
-                <p className="text-2xl font-bold text-red-600">{failedPrints}</p>
+                <p className="text-2xl font-bold text-orange-600">{failedPrints}</p>
               </div>
-              <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <XCircle className="h-5 w-5 text-red-600" />
+              <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <XCircle className="h-5 w-5 text-orange-600" />
               </div>
             </div>
           </CardContent>
@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
                   />
                   <Legend />
                   <Bar dataKey="completed" name="Successful" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="failed" name="Failed" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="failed" name="Failed" fill="#f97316" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}

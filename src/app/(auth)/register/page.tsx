@@ -93,7 +93,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 bg-blue-600 rounded-xl">
+            <div className="p-3 bg-[#999184] rounded-xl">
               <Factory className="h-8 w-8 text-white" />
             </div>
           </div>
@@ -105,7 +105,7 @@ export default function RegisterPage() {
         <form onSubmit={handleRegister}>
           <CardContent className="space-y-4">
             {error && (
-              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
+              <div className="p-3 text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-lg">
                 {error}
               </div>
             )}
@@ -165,7 +165,7 @@ export default function RegisterPage() {
             </Button>
             <p className="text-sm text-center text-gray-600">
               Already have an account?{' '}
-              <Link href="/login" className="text-blue-600 hover:underline font-medium">
+              <Link href="/login" className="text-[#7a756a] hover:underline font-medium">
                 Sign in
               </Link>
             </p>

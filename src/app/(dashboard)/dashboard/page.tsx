@@ -77,7 +77,7 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="bg-white rounded-xl p-6 border border-gray-100 text-center">
-        <p className="text-red-600 font-medium">Failed to load dashboard data</p>
+        <p className="text-orange-600 font-medium">Failed to load dashboard data</p>
         <p className="text-sm text-gray-400 mt-1">Please check your connection and try again</p>
       </div>
     );

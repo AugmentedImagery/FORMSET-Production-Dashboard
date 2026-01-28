@@ -5,17 +5,48 @@ import Image from 'next/image';
 import { formatDistanceToNow } from 'date-fns';
 import { ProductionOrder } from '@/types/database';
 import { ArrowRight, Package, Leaf } from 'lucide-react';
+import { OrderStatus } from '@/types/database';
 
 interface RecentOrdersProps {
   orders: ProductionOrder[];
 }
 
-// Product image placeholder with type-based styling
+// Format status for display
+function formatStatus(status: OrderStatus): string {
+  switch (status) {
+    case 'pending':
+      return 'Pending';
+    case 'in_production':
+      return 'In Production';
+    case 'completed':
+      return 'Completed';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return status;
+  }
+}
+
+// Product image with fallback to type-based styling
 function ProductImage({ product }: { product: ProductionOrder['product'] }) {
   const type = product?.type || 'kiosk';
-  const name = product?.name || 'Product';
+  const imageUrl = product?.image_url;
 
-  // Use different colors based on product type
+  // If product has an image, display it
+  if (imageUrl) {
+    return (
+      <div className="relative h-12 w-12 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+        <Image
+          src={imageUrl}
+          alt={product?.name || 'Product'}
+          fill
+          className="object-cover"
+        />
+      </div>
+    );
+  }
+
+  // Fallback: Use different colors based on product type
   const bgColor = type === 'planter' ? 'bg-emerald-100' : 'bg-gray-800';
   const iconColor = type === 'planter' ? 'text-emerald-600' : 'text-gray-300';
 
@@ -85,6 +116,11 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                 {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
               </p>
             </div>
+
+            {/* Status badge */}
+            <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-[#999184]/20 text-[#7a756a]">
+              {formatStatus(order.status)}
+            </span>
           </Link>
         ))}
       </div>

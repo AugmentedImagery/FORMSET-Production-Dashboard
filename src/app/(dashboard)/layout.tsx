@@ -14,8 +14,10 @@ export default function DashboardLayout({
   return (
     <QueryProvider>
       <div className="flex h-screen bg-[#fafafa]">
-        {/* Sidebar */}
-        <Sidebar />
+        {/* Sidebar - hidden on mobile */}
+        <div className="hidden lg:block">
+          <Sidebar />
+        </div>
 
         {/* Main content */}
         <div className="flex flex-1 flex-col overflow-hidden">

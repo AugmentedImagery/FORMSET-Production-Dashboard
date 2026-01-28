@@ -16,24 +16,29 @@ const navigation = [
   { name: 'Settings', href: '/dashboard/settings' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-full w-64 flex-col bg-[#1a1a1a]">
+    <div className="flex h-full w-48 flex-col bg-[#1a1a1a]">
       {/* Logo */}
-      <div className="flex h-20 items-center justify-center border-b border-white/10">
+      <div className="flex h-16 items-center justify-center gap-2.5 border-b border-white/10">
         <Image
           src="/formseticonlogo.png"
           alt="FORMSET"
-          width={48}
-          height={48}
-          className="h-12 w-12"
+          width={24}
+          height={24}
+          className="h-6 w-auto object-contain"
         />
+        <span className="text-white text-xl font-light tracking-wide">Objects</span>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-4 py-6">
+      <nav className="flex-1 space-y-1 px-3 py-6">
         {navigation.map((item) => {
           const isActive = pathname === item.href ||
                           (item.href !== '/dashboard' && pathname.startsWith(item.href));
@@ -41,8 +46,9 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
-                'block px-4 py-2.5 text-sm font-medium transition-colors rounded-lg',
+                'block px-3 py-2.5 text-sm font-medium transition-colors rounded-lg',
                 isActive
                   ? 'text-white bg-white/10'
                   : 'text-gray-400 hover:text-white hover:bg-white/5'

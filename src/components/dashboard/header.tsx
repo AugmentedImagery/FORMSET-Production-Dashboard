@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -11,12 +12,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, User, Search } from 'lucide-react';
+import { LogOut, User, Search, Menu } from 'lucide-react';
+import { Sidebar } from './sidebar';
 
 export function Header() {
   const { user, profile, role, signOut } = useAuth();
   const router = useRouter();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
@@ -36,15 +44,27 @@ export function Header() {
   };
 
   return (
-    <header className="flex h-16 items-center justify-between bg-[#1a1a1a] px-6">
+    <header className="flex h-16 items-center justify-between bg-[#1a1a1a] px-4 lg:px-6">
+      {/* Mobile menu button */}
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetTrigger asChild>
+          <Button variant="ghost" size="icon" className="lg:hidden text-white hover:bg-white/10">
+            <Menu className="h-6 w-6" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="p-0 w-48 bg-[#1a1a1a] border-r-0" showCloseButton={false}>
+          <Sidebar onNavigate={() => setMobileMenuOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
       {/* Search */}
-      <div className="flex items-center flex-1 max-w-xl">
+      <div className="flex items-center flex-1 max-w-xl mx-2 lg:mx-0">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+          <Search className="absolute left-3 lg:left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
           <input
             type="search"
-            placeholder="Search orders, parts..."
-            className="w-full h-10 pl-11 pr-4 bg-[#2a2a2a] border border-white/10 rounded-full text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent"
+            placeholder="Search..."
+            className="w-full h-9 lg:h-10 pl-9 lg:pl-11 pr-3 lg:pr-4 bg-[#2a2a2a] border border-white/10 rounded-full text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20 focus:border-transparent"
           />
         </div>
       </div>
@@ -59,7 +79,7 @@ export function Header() {
                   {getInitials(profile?.full_name, user?.email)}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col items-start">
+              <div className="hidden sm:flex flex-col items-start">
                 <span className="text-sm font-semibold text-white">
                   {profile?.full_name || user?.email?.split('@')[0] || 'User'}
                 </span>
@@ -82,7 +102,7 @@ export function Header() {
               Profile Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
+            <DropdownMenuItem onClick={handleSignOut} className="text-orange-600">
               <LogOut className="mr-2 h-4 w-4" />
               Sign out
             </DropdownMenuItem>

@@ -158,11 +158,11 @@ export default function PrintersPage() {
       case 'idle':
         return <Wifi className="h-5 w-5 text-green-600" />;
       case 'printing':
-        return <Play className="h-5 w-5 text-blue-600" />;
+        return <Play className="h-5 w-5 text-[#7a756a]" />;
       case 'error':
-        return <AlertCircle className="h-5 w-5 text-red-600" />;
+        return <AlertCircle className="h-5 w-5 text-orange-600" />;
       case 'maintenance':
-        return <Wrench className="h-5 w-5 text-orange-600" />;
+        return <Wrench className="h-5 w-5 text-yellow-600" />;
       case 'offline':
       default:
         return <WifiOff className="h-5 w-5 text-gray-400" />;
@@ -174,11 +174,11 @@ export default function PrintersPage() {
       case 'idle':
         return 'bg-green-100 text-green-700';
       case 'printing':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-[#999184]/20 text-[#7a756a]';
       case 'error':
-        return 'bg-red-100 text-red-700';
-      case 'maintenance':
         return 'bg-orange-100 text-orange-700';
+      case 'maintenance':
+        return 'bg-yellow-100 text-yellow-700';
       case 'offline':
       default:
         return 'bg-gray-100 text-gray-700';
@@ -235,7 +235,7 @@ export default function PrintersPage() {
         </div>
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-red-600 font-medium">Error loading printers</p>
+            <p className="text-orange-600 font-medium">Error loading printers</p>
             <p className="text-sm text-gray-500 mt-2">{error.message}</p>
           </CardContent>
         </Card>
@@ -334,11 +334,11 @@ export default function PrintersPage() {
                 <div
                   className={`absolute top-0 left-0 right-0 h-1 ${
                     printer.status === 'printing'
-                      ? 'bg-blue-500'
+                      ? 'bg-[#999184]'
                       : printer.status === 'idle'
                       ? 'bg-green-500'
                       : printer.status === 'error'
-                      ? 'bg-red-500'
+                      ? 'bg-orange-500'
                       : 'bg-gray-300'
                   }`}
                 />
@@ -386,7 +386,7 @@ export default function PrintersPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleDelete(printer.id)}
-                              className="text-red-600"
+                              className="text-orange-600"
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete Printer

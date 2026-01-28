@@ -201,12 +201,12 @@ export default function OrderDetailPage() {
         return 'bg-yellow-100 text-yellow-700';
       case 'in_production':
       case 'printing':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-[#999184]/20 text-[#7a756a]';
       case 'completed':
         return 'bg-green-100 text-green-700';
       case 'cancelled':
       case 'failed':
-        return 'bg-red-100 text-red-700';
+        return 'bg-orange-100 text-orange-700';
       default:
         return 'bg-gray-100 text-gray-700';
     }
@@ -229,7 +229,7 @@ export default function OrderDetailPage() {
   if (error) {
     return (
       <div className="text-center py-12">
-        <p className="text-red-600 font-medium">Error loading order</p>
+        <p className="text-orange-600 font-medium">Error loading order</p>
         <p className="text-sm text-gray-500 mt-2">{error.message}</p>
         <p className="text-xs text-gray-400 mt-1">Order ID: {params.id}</p>
         <Button variant="outline" className="mt-4" onClick={() => router.back()}>
@@ -272,13 +272,13 @@ export default function OrderDetailPage() {
               {order.status.replace('_', ' ')}
             </Badge>
             {order.priority === 'rush' && (
-              <Badge className="bg-orange-100 text-orange-700">
+              <Badge className="bg-yellow-100 text-yellow-700">
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 Rush
               </Badge>
             )}
             {order.priority === 'critical' && (
-              <Badge className="bg-red-100 text-red-700">
+              <Badge className="bg-orange-100 text-orange-700">
                 <AlertTriangle className="h-3 w-3 mr-1" />
                 Critical
               </Badge>
@@ -366,7 +366,7 @@ export default function OrderDetailPage() {
                       <div className="text-sm text-gray-600 whitespace-nowrap">
                         {job.quantity_completed} / {job.quantity_needed}
                         {job.quantity_failed > 0 && (
-                          <span className="text-red-600 ml-2">
+                          <span className="text-orange-600 ml-2">
                             ({job.quantity_failed} failed)
                           </span>
                         )}
@@ -399,12 +399,12 @@ export default function OrderDetailPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-                  order.source === 'shopify' ? 'bg-green-100' : 'bg-blue-100'
+                  order.source === 'shopify' ? 'bg-green-100' : 'bg-[#999184]/20'
                 }`}>
                   {order.source === 'shopify' ? (
                     <ShoppingBag className="h-5 w-5 text-green-600" />
                   ) : (
-                    <Building2 className="h-5 w-5 text-blue-600" />
+                    <Building2 className="h-5 w-5 text-[#7a756a]" />
                   )}
                 </div>
                 <div>

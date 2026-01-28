@@ -163,7 +163,7 @@ function EditPartDialog({ open, onClose, part, products, onSave, isPending }: Ed
               })}
             </div>
             {selectedProductIds.length === 0 && (
-              <p className="text-xs text-red-500">Select at least one product</p>
+              <p className="text-xs text-orange-500">Select at least one product</p>
             )}
           </div>
           <div className="space-y-2">
@@ -738,8 +738,8 @@ export default function PartsPage() {
 
   const getStockStatus = (onHand: number, reserved: number, threshold: number) => {
     const available = onHand - reserved;
-    if (available <= 0) return { label: 'Out of Stock', color: 'bg-red-100 text-red-700' };
-    if (available < threshold) return { label: 'Low Stock', color: 'bg-orange-100 text-orange-700' };
+    if (available <= 0) return { label: 'Out of Stock', color: 'bg-orange-100 text-orange-700' };
+    if (available < threshold) return { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700' };
     return { label: 'In Stock', color: 'bg-green-100 text-green-700' };
   };
 
@@ -868,7 +868,7 @@ export default function PartsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setDeletingProduct(product)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 self-start"
+                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 self-start"
                       title="Delete product"
                       disabled={partsCount > 0}
                     >
@@ -1052,7 +1052,7 @@ export default function PartsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => setDeletingPart(part)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                             title="Delete part"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1113,7 +1113,7 @@ export default function PartsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeletePart}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-orange-600 hover:bg-orange-700"
               disabled={deletePart.isPending}
             >
               {deletePart.isPending ? (
@@ -1146,7 +1146,7 @@ export default function PartsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteProduct}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-orange-600 hover:bg-orange-700"
               disabled={deleteProduct.isPending}
             >
               {deleteProduct.isPending ? (

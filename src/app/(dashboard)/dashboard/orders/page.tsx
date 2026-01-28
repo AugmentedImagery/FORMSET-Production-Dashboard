@@ -322,7 +322,7 @@ export default function OrdersPage() {
       case 'pending':
         return 'bg-yellow-100 text-yellow-700';
       case 'in_production':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-[#999184]/20 text-[#7a756a]';
       case 'completed':
         return 'bg-green-100 text-green-700';
       case 'cancelled':
@@ -462,13 +462,13 @@ export default function OrdersPage() {
                       <TableCell className="font-mono">{order.quantity}</TableCell>
                       <TableCell>
                         {order.priority === 'critical' && (
-                          <Badge className="bg-red-100 text-red-700">
+                          <Badge className="bg-orange-100 text-orange-700">
                             <AlertTriangle className="h-3 w-3 mr-1" />
                             Critical
                           </Badge>
                         )}
                         {order.priority === 'rush' && (
-                          <Badge className="bg-orange-100 text-orange-700">
+                          <Badge className="bg-yellow-100 text-yellow-700">
                             <AlertTriangle className="h-3 w-3 mr-1" />
                             Rush
                           </Badge>
@@ -540,7 +540,7 @@ export default function OrdersPage() {
                                 onClick={() =>
                                   handleStatusChange(order.id, 'cancelled')
                                 }
-                                className="text-red-600"
+                                className="text-orange-600"
                               >
                                 <XCircle className="mr-2 h-4 w-4" />
                                 Cancel Order

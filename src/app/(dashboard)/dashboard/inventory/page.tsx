@@ -144,10 +144,10 @@ export default function InventoryPage() {
     const percentage = threshold > 0 ? Math.min((available / threshold) * 100, 100) : 100;
 
     if (available <= 0) {
-      return { status: 'critical', percentage: 0, color: 'bg-red-500' };
+      return { status: 'critical', percentage: 0, color: 'bg-orange-500' };
     }
     if (available < threshold) {
-      return { status: 'low', percentage, color: 'bg-orange-500' };
+      return { status: 'low', percentage, color: 'bg-yellow-500' };
     }
     return { status: 'healthy', percentage: 100, color: 'bg-green-500' };
   };
@@ -204,13 +204,13 @@ export default function InventoryPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className={lowStockCount > 0 ? 'border-orange-200' : ''}>
+        <Card className={lowStockCount > 0 ? 'border-yellow-200' : ''}>
           <CardContent className="p-4 flex items-center gap-4">
             <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${
-              lowStockCount > 0 ? 'bg-orange-100' : 'bg-green-100'
+              lowStockCount > 0 ? 'bg-yellow-100' : 'bg-green-100'
             }`}>
               <AlertTriangle className={`h-6 w-6 ${
-                lowStockCount > 0 ? 'text-orange-600' : 'text-green-600'
+                lowStockCount > 0 ? 'text-yellow-600' : 'text-green-600'
               }`} />
             </div>
             <div>
@@ -219,13 +219,13 @@ export default function InventoryPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className={outOfStockCount > 0 ? 'border-red-200' : ''}>
+        <Card className={outOfStockCount > 0 ? 'border-orange-200' : ''}>
           <CardContent className="p-4 flex items-center gap-4">
             <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${
-              outOfStockCount > 0 ? 'bg-red-100' : 'bg-green-100'
+              outOfStockCount > 0 ? 'bg-orange-100' : 'bg-green-100'
             }`}>
               {outOfStockCount > 0 ? (
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+                <AlertTriangle className="h-6 w-6 text-orange-600" />
               ) : (
                 <CheckCircle className="h-6 w-6 text-green-600" />
               )}
@@ -325,9 +325,9 @@ export default function InventoryPage() {
                         variant="secondary"
                         className={
                           stockLevel.status === 'critical'
-                            ? 'bg-red-100 text-red-700'
-                            : stockLevel.status === 'low'
                             ? 'bg-orange-100 text-orange-700'
+                            : stockLevel.status === 'low'
+                            ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-green-100 text-green-700'
                         }
                       >

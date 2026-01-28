@@ -110,29 +110,17 @@ export default function SchedulePage() {
   const selectedDayJobs = getJobsForDay(selectedDate);
   const selectedDayCapacity = getDayCapacity(selectedDate);
 
-  const getStatusColor = (status: string, isPastDeadline: boolean) => {
-    if (isPastDeadline) {
-      return 'border-l-red-500 bg-red-50';
-    }
-    switch (status) {
-      case 'printing':
-        return 'border-l-blue-500 bg-blue-50';
-      case 'queued':
-        return 'border-l-yellow-500 bg-yellow-50';
-      case 'completed':
-        return 'border-l-green-500 bg-green-50';
-      default:
-        return 'border-l-gray-500 bg-gray-50';
-    }
+  const getStatusColor = () => {
+    return 'border-l-[#999184] bg-[#999184]/10';
   };
 
   const getStatusBadge = (status: string, isPastDeadline: boolean) => {
     if (isPastDeadline) {
-      return <Badge className="bg-red-100 text-red-700">Past Deadline</Badge>;
+      return <Badge className="bg-orange-100 text-orange-700">Past Deadline</Badge>;
     }
     switch (status) {
       case 'printing':
-        return <Badge className="bg-blue-100 text-blue-700">Printing</Badge>;
+        return <Badge className="bg-[#999184]/20 text-[#7a756a]">Printing</Badge>;
       case 'queued':
         return <Badge className="bg-yellow-100 text-yellow-700">Queued</Badge>;
       case 'completed':
@@ -144,20 +132,20 @@ export default function SchedulePage() {
 
   const getPriorityIndicator = (priority: string) => {
     if (priority === 'critical') {
-      return <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />;
+      return <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />;
     }
     if (priority === 'rush') {
-      return <div className="w-2 h-2 rounded-full bg-orange-500" />;
+      return <div className="w-2 h-2 rounded-full bg-yellow-500" />;
     }
     return null;
   };
 
   const getPriorityBadge = (priority: string) => {
     if (priority === 'critical') {
-      return <Badge className="bg-red-500 text-white">Critical</Badge>;
+      return <Badge className="bg-orange-500 text-white">Critical</Badge>;
     }
     if (priority === 'rush') {
-      return <Badge className="bg-orange-500 text-white">Rush</Badge>;
+      return <Badge className="bg-yellow-500 text-white">Rush</Badge>;
     }
     return <Badge variant="outline">Normal</Badge>;
   };
@@ -192,7 +180,7 @@ export default function SchedulePage() {
         </div>
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-red-600 font-medium">Error loading schedule</p>
+            <p className="text-orange-600 font-medium">Error loading schedule</p>
             <p className="text-sm text-gray-500 mt-2">{error.message}</p>
           </CardContent>
         </Card>
@@ -239,15 +227,15 @@ export default function SchedulePage() {
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
             <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-              jobsPastDeadline.length > 0 ? 'bg-red-100' : 'bg-gray-100'
+              jobsPastDeadline.length > 0 ? 'bg-orange-100' : 'bg-gray-100'
             }`}>
               <AlertTriangle className={`h-5 w-5 ${
-                jobsPastDeadline.length > 0 ? 'text-red-600' : 'text-gray-600'
+                jobsPastDeadline.length > 0 ? 'text-orange-600' : 'text-gray-600'
               }`} />
             </div>
             <div>
               <p className="text-sm text-gray-500">Jobs Past Deadline</p>
-              <p className={`text-xl font-bold ${jobsPastDeadline.length > 0 ? 'text-red-600' : ''}`}>
+              <p className={`text-xl font-bold ${jobsPastDeadline.length > 0 ? 'text-orange-600' : ''}`}>
                 {jobsPastDeadline.length}
               </p>
             </div>
@@ -257,9 +245,9 @@ export default function SchedulePage() {
 
       {/* Deadline warnings */}
       {jobsPastDeadline.length > 0 && (
-        <Card className="border-red-200 bg-red-50/50">
+        <Card className="border-orange-200 bg-orange-50/50">
           <CardHeader className="py-3">
-            <CardTitle className="text-base flex items-center gap-2 text-red-800">
+            <CardTitle className="text-base flex items-center gap-2 text-orange-800">
               <AlertCircle className="h-4 w-4" />
               Jobs Scheduled Past Deadline ({jobsPastDeadline.length})
             </CardTitle>
@@ -270,11 +258,11 @@ export default function SchedulePage() {
                 <Link
                   key={job.id}
                   href={`/dashboard/orders/${job.production_order_id}`}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-red-200 text-sm hover:bg-red-50 transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-orange-200 text-sm hover:bg-orange-50 transition-colors"
                 >
                   {getPriorityIndicator(job.production_order?.priority || 'normal')}
                   <span className="font-medium">{job.part?.name}</span>
-                  <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">
+                  <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
                     Due: {job.production_order?.due_date
                       ? format(new Date(job.production_order.due_date), 'MMM d')
                       : 'N/A'}
@@ -290,13 +278,13 @@ export default function SchedulePage() {
       )}
 
       {/* Main content: Today's detail + Month calendar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
         {/* Today's Detailed View */}
-        <Card className="lg:col-span-1 lg:row-span-2">
-          <CardHeader className={`${isSelectedToday ? 'bg-blue-50 border-b border-blue-100' : 'bg-gray-50 border-b'}`}>
+        <Card className="lg:col-span-1 lg:row-span-2 overflow-hidden py-6 mb-2 gap-3">
+          <CardHeader className={`${isSelectedToday ? 'bg-[#999184]/10 border-b border-[#999184]/20' : 'bg-gray-50 border-b'} -mx-4 -mt-6 px-8 pt-3 pb-3 rounded-t-xl`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm font-medium ${isSelectedToday ? 'text-blue-600' : 'text-gray-500'}`}>
+                <p className={`text-sm font-medium pt-2 ${isSelectedToday ? 'text-[#7a756a]' : 'text-gray-500'}`}>
                   {isSelectedToday ? "Today's Schedule" : format(selectedDate, 'EEEE')}
                 </p>
                 <p className="text-2xl font-bold text-gray-900">
@@ -304,7 +292,7 @@ export default function SchedulePage() {
                 </p>
               </div>
               {isSelectedToday && (
-                <div className="h-12 w-12 rounded-full bg-blue-500 text-white flex items-center justify-center text-lg font-bold">
+                <div className="h-12 w-12 rounded-full bg-[#999184] text-white flex items-center justify-center text-lg font-bold">
                   {format(new Date(), 'd')}
                 </div>
               )}
@@ -319,7 +307,7 @@ export default function SchedulePage() {
               </div>
             )}
           </CardHeader>
-          <CardContent className="p-4 max-h-[500px] overflow-y-auto">
+          <CardContent className="p-3 max-h-[500px] overflow-y-auto">
             {isWeekend(selectedDate) ? (
               <div className="text-center py-8 text-gray-400">
                 <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -331,7 +319,7 @@ export default function SchedulePage() {
                 <p>No jobs scheduled for this day</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div>
                 {selectedDayJobs.map((job) => {
                   const progress = job.quantity_needed > 0
                     ? Math.round((job.quantity_completed / job.quantity_needed) * 100)
@@ -369,9 +357,9 @@ export default function SchedulePage() {
                     <Link
                       key={job.id}
                       href={`/dashboard/orders/${job.production_order_id}`}
-                      className={`block p-4 rounded-lg border-l-4 ${getStatusColor(job.status, job.isPastDeadline)} hover:shadow-md transition-shadow`}
+                      className={`block p-3 rounded-lg border-l-4 ${getStatusColor()} hover:shadow-md transition-shadow`}
                     >
-                      <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-start justify-between mb-1">
                         <div className="flex items-center gap-2">
                           {getPriorityIndicator(job.production_order?.priority || 'normal')}
                           <span className="font-semibold text-gray-900">
@@ -412,17 +400,17 @@ export default function SchedulePage() {
                         <Progress value={progress} className="h-2" />
 
                         {/* Print cycles for THIS DAY */}
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 space-y-1">
-                          <div className="flex items-center justify-between text-blue-800">
+                        <div className="bg-[#999184]/10 border border-[#999184]/30 rounded-lg p-2 space-y-1">
+                          <div className="flex items-center justify-between text-[#7a756a]">
                             <span className="flex items-center gap-1 font-medium">
                               <Printer className="h-3.5 w-3.5" />
                               Prints for This Day
                             </span>
-                            <span className="font-bold text-blue-900 text-lg">
+                            <span className="font-bold text-[#5a5650] text-lg">
                               {printsForThisDay}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between text-xs text-blue-600">
+                          <div className="flex items-center justify-between text-xs text-[#7a756a]">
                             <span>~{formatPrintTime(printTimeForThisDay)} of printing</span>
                             <span>{partsPerPrint * printsForThisDay} parts</span>
                           </div>
@@ -457,7 +445,7 @@ export default function SchedulePage() {
                         {job.production_order?.due_date && (
                           <div className="flex items-center justify-between text-gray-600">
                             <span>Due Date</span>
-                            <span className={`font-medium ${job.isPastDeadline ? 'text-red-600' : ''}`}>
+                            <span className={`font-medium ${job.isPastDeadline ? 'text-orange-600' : ''}`}>
                               {format(new Date(job.production_order.due_date), 'MMM d, yyyy')}
                             </span>
                           </div>
@@ -474,7 +462,7 @@ export default function SchedulePage() {
                         )}
                       </div>
 
-                      <div className="mt-3 pt-3 border-t flex items-center justify-end text-blue-600 text-sm">
+                      <div className="mt-2 pt-2 border-t flex items-center justify-end text-[#7a756a] text-sm">
                         <span>View Order</span>
                         <ArrowRight className="h-4 w-4 ml-1" />
                       </div>
@@ -552,16 +540,16 @@ export default function SchedulePage() {
                     onClick={() => setSelectedDate(day)}
                     className={`
                       relative p-2 min-h-[80px] rounded-lg border text-left transition-all
-                      ${isSelected ? 'ring-2 ring-blue-500 border-blue-300' : 'border-gray-200'}
-                      ${isToday ? 'bg-blue-50' : isWeekendDay ? 'bg-gray-50' : 'bg-white'}
+                      ${isSelected ? 'ring-2 ring-[#999184] border-[#999184]/50' : 'border-gray-200'}
+                      ${isToday ? 'bg-[#999184]/10' : isWeekendDay ? 'bg-gray-50' : 'bg-white'}
                       ${!isCurrentMonth ? 'opacity-40' : ''}
                       ${isWeekendDay ? 'opacity-60' : ''}
-                      hover:border-blue-300 hover:shadow-sm
+                      hover:border-[#999184]/50 hover:shadow-sm
                     `}
                   >
                     <div className={`
                       text-sm font-medium mb-1
-                      ${isToday ? 'text-blue-600' : 'text-gray-900'}
+                      ${isToday ? 'text-[#7a756a]' : 'text-gray-900'}
                     `}>
                       {format(day, 'd')}
                     </div>
@@ -575,9 +563,9 @@ export default function SchedulePage() {
                               <div
                                 className={`h-full rounded-full ${
                                   capacity.percentage > 90
-                                    ? 'bg-red-500'
-                                    : capacity.percentage > 70
                                     ? 'bg-orange-500'
+                                    : capacity.percentage > 70
+                                    ? 'bg-yellow-500'
                                     : 'bg-green-500'
                                 }`}
                                 style={{ width: `${capacity.percentage}%` }}
@@ -594,9 +582,9 @@ export default function SchedulePage() {
                               className={`
                                 w-2 h-2 rounded-full
                                 ${job.isPastDeadline
-                                  ? 'bg-red-500'
+                                  ? 'bg-orange-500'
                                   : job.status === 'printing'
-                                  ? 'bg-blue-500'
+                                  ? 'bg-[#999184]'
                                   : 'bg-yellow-500'
                                 }
                               `}
@@ -620,7 +608,7 @@ export default function SchedulePage() {
                         {/* Alert indicator */}
                         {hasPastDeadline && (
                           <div className="absolute top-1 right-1">
-                            <AlertCircle className="h-3 w-3 text-red-500" />
+                            <AlertCircle className="h-3 w-3 text-orange-500" />
                           </div>
                         )}
                       </>
@@ -644,19 +632,19 @@ export default function SchedulePage() {
           <span>Queued</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-blue-500" />
+          <div className="w-3 h-3 rounded-full bg-[#999184]" />
           <span>Printing</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-red-500" />
+          <div className="w-3 h-3 rounded-full bg-orange-500" />
           <span>Past Deadline</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
           <span>Critical Priority</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-orange-500" />
+          <div className="w-2 h-2 rounded-full bg-yellow-500" />
           <span>Rush Priority</span>
         </div>
         <div className="flex items-center gap-2">
@@ -664,11 +652,11 @@ export default function SchedulePage() {
           <span>&lt;70% capacity</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-6 bg-orange-500 rounded-full" />
+          <div className="h-1.5 w-6 bg-yellow-500 rounded-full" />
           <span>70-90% capacity</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-6 bg-red-500 rounded-full" />
+          <div className="h-1.5 w-6 bg-orange-500 rounded-full" />
           <span>&gt;90% capacity</span>
         </div>
       </div>
