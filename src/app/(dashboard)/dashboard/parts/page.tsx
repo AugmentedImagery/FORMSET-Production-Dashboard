@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { useParts, useProducts, useUpdatePart, useCreatePart, useDeletePart, useCreateProduct, useDeleteProduct, useUploadProductImage, PartWithProduct, UpdatePartInput } from '@/hooks/useParts';
+import { useGcodeMappings, useCreateGcodeMapping, useDeleteGcodeMapping } from '@/hooks/useInventoryFulfillment';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,9 +59,12 @@ import {
   ShoppingBag,
   Upload,
   ImageIcon,
+  FileCode,
+  CheckCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { CreatePartInput, CreateProductInput, Product, ProductType } from '@/types/database';
+import { CreatePartInput, CreateProductInput, Product, ProductType, GcodePartMapping } from '@/types/database';
 
 interface EditPartDialogProps {
   open: boolean;
@@ -483,6 +487,127 @@ interface AddProductDialogProps {
   isPending: boolean;
 }
 
+interface GcodeMappingsDialogProps {
+  open: boolean;
+  onClose: () => void;
+  partId: string;
+  partName: string;
+  mappings: GcodePartMapping[];
+  onAdd: (filename: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+  isAdding: boolean;
+  isDeleting: boolean;
+}
+
+function GcodeMappingsDialog({
+  open,
+  onClose,
+  partId,
+  partName,
+  mappings,
+  onAdd,
+  onDelete,
+  isAdding,
+  isDeleting,
+}: GcodeMappingsDialogProps) {
+  const [newFilename, setNewFilename] = useState('');
+
+  const handleAdd = async () => {
+    if (!newFilename.trim()) {
+      toast.error('Please enter a gcode filename');
+      return;
+    }
+    await onAdd(newFilename.trim());
+    setNewFilename('');
+  };
+
+  const partMappings = mappings.filter(m => m.part_id === partId);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileCode className="h-5 w-5" />
+            Gcode Mappings
+          </DialogTitle>
+          <DialogDescription>
+            Map gcode filenames to {partName} for automatic inventory tracking
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          {/* Existing mappings */}
+          {partMappings.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Current Mappings</Label>
+              <div className="space-y-2">
+                {partMappings.map((mapping) => (
+                  <div
+                    key={mapping.id}
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileCode className="h-4 w-4 text-gray-500" />
+                      <span className="font-mono text-sm">{mapping.gcode_filename}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(mapping.id)}
+                      disabled={isDeleting}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-gray-500 bg-yellow-50 rounded-lg border border-yellow-200">
+              <AlertTriangle className="h-6 w-6 mx-auto mb-2 text-yellow-600" />
+              <p className="text-sm">No gcode mappings configured</p>
+              <p className="text-xs text-yellow-700 mt-1">
+                Prints won&apos;t auto-track without a mapping
+              </p>
+            </div>
+          )}
+
+          {/* Add new mapping */}
+          <div className="space-y-2">
+            <Label htmlFor="gcode-filename">Add New Mapping</Label>
+            <div className="flex gap-2">
+              <Input
+                id="gcode-filename"
+                placeholder="e.g., planter_base_v2.gcode"
+                value={newFilename}
+                onChange={(e) => setNewFilename(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+              />
+              <Button onClick={handleAdd} disabled={isAdding || !newFilename.trim()}>
+                {isAdding ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Enter the gcode filename as it appears on your Bambu printer.
+              Partial matches are supported (e.g., &quot;planter_base&quot; will match &quot;planter_base_v2.gcode&quot;).
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AddProductDialog({ open, onClose, onSave, isPending }: AddProductDialogProps) {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
@@ -593,16 +718,20 @@ export default function PartsPage() {
   const [isAddProductDialogOpen, setIsAddProductDialogOpen] = useState(false);
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
+  const [gcodeDialogPart, setGcodeDialogPart] = useState<PartWithProduct | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { canEdit } = useAuth();
   const { data: parts, isLoading } = useParts();
   const { data: products } = useProducts();
+  const { data: gcodeMappings } = useGcodeMappings();
   const updatePart = useUpdatePart();
   const createPart = useCreatePart();
   const deletePart = useDeletePart();
   const createProduct = useCreateProduct();
   const deleteProduct = useDeleteProduct();
   const uploadProductImage = useUploadProductImage();
+  const createGcodeMapping = useCreateGcodeMapping();
+  const deleteGcodeMapping = useDeleteGcodeMapping();
 
   const handleSavePart = async (data: Parameters<typeof updatePart.mutateAsync>[0]) => {
     try {
@@ -714,6 +843,34 @@ export default function PartsPage() {
     if (e.target) {
       e.target.value = '';
     }
+  };
+
+  const handleAddGcodeMapping = async (filename: string) => {
+    if (!gcodeDialogPart) return;
+    try {
+      await createGcodeMapping.mutateAsync({
+        gcode_filename: filename,
+        part_id: gcodeDialogPart.id,
+      });
+      toast.success('Gcode mapping added');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to add mapping';
+      toast.error(message);
+    }
+  };
+
+  const handleDeleteGcodeMapping = async (mappingId: string) => {
+    try {
+      await deleteGcodeMapping.mutateAsync(mappingId);
+      toast.success('Gcode mapping removed');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to remove mapping';
+      toast.error(message);
+    }
+  };
+
+  const getGcodeMappingsForPart = (partId: string) => {
+    return gcodeMappings?.filter(m => m.part_id === partId && m.is_active) || [];
   };
 
   // Count parts per product (parts can belong to multiple products)
@@ -957,6 +1114,12 @@ export default function PartsPage() {
                   </div>
                 </TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>
+                  <div className="flex items-center gap-1">
+                    <FileCode className="h-4 w-4" />
+                    Gcode
+                  </div>
+                </TableHead>
                 {canEdit && <TableHead className="w-[140px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
@@ -1028,6 +1191,30 @@ export default function PartsPage() {
                         {status.label}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const mappings = getGcodeMappingsForPart(part.id);
+                        return mappings.length > 0 ? (
+                          <button
+                            onClick={() => canEdit && setGcodeDialogPart(part)}
+                            className="flex items-center gap-1 text-green-600 hover:underline"
+                            disabled={!canEdit}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                            <span className="text-xs">{mappings.length}</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => canEdit && setGcodeDialogPart(part)}
+                            className="flex items-center gap-1 text-yellow-600 hover:underline"
+                            disabled={!canEdit}
+                          >
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="text-xs">None</span>
+                          </button>
+                        );
+                      })()}
+                    </TableCell>
                     {canEdit && (
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -1065,7 +1252,7 @@ export default function PartsPage() {
               })}
               {filteredParts?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                     No parts found
                   </TableCell>
                 </TableRow>
@@ -1157,6 +1344,21 @@ export default function PartsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Gcode mappings dialog */}
+      {gcodeDialogPart && gcodeMappings && (
+        <GcodeMappingsDialog
+          open={!!gcodeDialogPart}
+          onClose={() => setGcodeDialogPart(null)}
+          partId={gcodeDialogPart.id}
+          partName={gcodeDialogPart.name}
+          mappings={gcodeMappings}
+          onAdd={handleAddGcodeMapping}
+          onDelete={handleDeleteGcodeMapping}
+          isAdding={createGcodeMapping.isPending}
+          isDeleting={deleteGcodeMapping.isPending}
+        />
+      )}
     </div>
   );
 }

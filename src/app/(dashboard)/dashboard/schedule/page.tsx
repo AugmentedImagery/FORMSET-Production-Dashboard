@@ -1,143 +1,159 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import {
-  format,
-  addDays,
-  addMonths,
-  subMonths,
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  isSameDay,
-  isSameMonth,
-  isWeekend,
-  startOfDay,
-  isToday as checkIsToday,
-} from 'date-fns';
-import { useScheduleData } from '@/hooks/useSchedule';
+import { format } from 'date-fns';
+import { useDetailedPartDemand, useLogInventoryPrint, useGcodeMappings } from '@/hooks/useInventoryFulfillment';
+import { usePrinters } from '@/hooks/usePrinters';
+import { useOrders } from '@/hooks/useOrders';
 import { useAuth } from '@/hooks/useAuth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Printer,
   Clock,
   AlertTriangle,
-  Printer,
-  AlertCircle,
   Package,
-  ArrowRight,
+  CheckCircle2,
+  XCircle,
+  Box,
+  Layers,
+  Target,
+  FileCode,
+  Plus,
 } from 'lucide-react';
-import { ScheduledJob, getAvailablePrinters, formatPrintTime } from '@/lib/scheduling';
+import { formatPrintTime } from '@/lib/scheduling';
 
 export default function SchedulePage() {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const { scheduledJobs, printers, isLoading, error } = useScheduleData();
+  const { data: demandData, isLoading, error, refetch } = useDetailedPartDemand();
+  const { data: allPrinters } = usePrinters();
+  const { data: orders } = useOrders();
+  const { data: gcodeMappings } = useGcodeMappings();
   const { canEdit } = useAuth();
+  const logPrint = useLogInventoryPrint();
 
-  // Get available printers count
-  const availablePrinters = useMemo(() =>
-    getAvailablePrinters(printers || []),
-    [printers]
+  // Only count printers that are linked (have bambu_device_id)
+  const linkedPrinters = allPrinters?.filter(p => p.bambu_device_id) || [];
+  const printers = linkedPrinters;
+
+  // Check for pending orders without allocations (need migration)
+  const pendingOrders = orders?.filter(o =>
+    o.status === 'pending' || o.status === 'in_production'
+  ) || [];
+  const ordersWithoutAllocations = pendingOrders.filter(o =>
+    !o.allocations || o.allocations.length === 0
   );
+  const hasOrdersNeedingMigration = ordersWithoutAllocations.length > 0;
 
-  // Generate calendar days for the month view
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  // Log print dialog state
+  const [logPrintDialog, setLogPrintDialog] = useState<{
+    open: boolean;
+    partId: string;
+    partName: string;
+    partsPerPrint: number;
+    printTimeMinutes: number;
+    gcodeMappingFilename?: string;
+  } | null>(null);
+  const [logPrintQty, setLogPrintQty] = useState(1);
+  const [logPrintPrinterId, setLogPrintPrinterId] = useState<string>('');
+  const [logPrintStatus, setLogPrintStatus] = useState<'success' | 'failed'>('success');
+  const [isLogging, setIsLogging] = useState(false);
 
-    const days: Date[] = [];
-    let day = calendarStart;
-    while (day <= calendarEnd) {
-      days.push(day);
-      day = addDays(day, 1);
-    }
-    return days;
-  }, [currentMonth]);
+  // Calculate summary stats
+  const stats = demandData?.reduce(
+    (acc, item) => {
+      acc.totalPrintsNeeded += item.printsRequired;
+      acc.totalPartsNeeded += item.deficit;
+      acc.totalTimeMinutes += item.printsRequired * (item.part.print_time_minutes || 60);
 
-  // Get jobs for a specific day
-  const getJobsForDay = (date: Date): ScheduledJob[] => {
-    const targetDate = startOfDay(date);
-    return scheduledJobs.filter(job => {
-      const jobStart = startOfDay(job.scheduledDate);
-      const jobEnd = startOfDay(job.estimatedEndDate);
-      return (
-        jobStart.getTime() <= targetDate.getTime() &&
-        targetDate.getTime() <= jobEnd.getTime()
+      const highestPriority = Math.min(
+        ...item.orders.map(o =>
+          o.priority === 'critical' ? 0 : o.priority === 'rush' ? 1 : 2
+        )
       );
+      if (highestPriority === 0) acc.criticalItems++;
+      else if (highestPriority === 1) acc.rushItems++;
+
+      return acc;
+    },
+    { totalPrintsNeeded: 0, totalPartsNeeded: 0, totalTimeMinutes: 0, criticalItems: 0, rushItems: 0 }
+  ) || { totalPrintsNeeded: 0, totalPartsNeeded: 0, totalTimeMinutes: 0, criticalItems: 0, rushItems: 0 };
+
+  // Group demand by priority
+  const priorityGroups = {
+    critical: demandData?.filter(d =>
+      d.orders.some(o => o.priority === 'critical')
+    ) || [],
+    rush: demandData?.filter(d =>
+      !d.orders.some(o => o.priority === 'critical') &&
+      d.orders.some(o => o.priority === 'rush')
+    ) || [],
+    normal: demandData?.filter(d =>
+      !d.orders.some(o => o.priority === 'critical') &&
+      !d.orders.some(o => o.priority === 'rush')
+    ) || [],
+  };
+
+  const handleLogPrint = async () => {
+    if (!logPrintDialog) return;
+
+    setIsLogging(true);
+    try {
+      const partsProduced = logPrintStatus === 'success'
+        ? logPrintQty * logPrintDialog.partsPerPrint
+        : 0;
+
+      await logPrint.mutateAsync({
+        part_id: logPrintDialog.partId,
+        quantity_printed: partsProduced,
+        status: logPrintStatus,
+        printer_id: logPrintPrinterId || undefined,
+        gcode_filename: logPrintDialog.gcodeMappingFilename,
+      });
+
+      setLogPrintDialog(null);
+      setLogPrintQty(1);
+      setLogPrintPrinterId('');
+      setLogPrintStatus('success');
+      refetch();
+    } catch (err) {
+      console.error('Failed to log print:', err);
+    } finally {
+      setIsLogging(false);
+    }
+  };
+
+  const openLogPrintDialog = (item: typeof demandData extends (infer T)[] | undefined ? T : never) => {
+    // Find gcode mapping for this part
+    const mapping = gcodeMappings?.find(m => m.part_id === item.part.id && m.is_active);
+
+    setLogPrintDialog({
+      open: true,
+      partId: item.part.id,
+      partName: item.part.name,
+      partsPerPrint: item.part.parts_per_print || 1,
+      printTimeMinutes: item.part.print_time_minutes || 60,
+      gcodeMappingFilename: mapping?.gcode_filename,
     });
-  };
-
-  // Calculate daily capacity usage
-  const getDayCapacity = (date: Date) => {
-    if (isWeekend(date)) return { used: 0, total: 0, percentage: 0 };
-
-    const printerCount = Math.max(availablePrinters.length, 1);
-    const totalMinutes = printerCount * 8 * 60; // 8 hours per printer
-    const dayJobs = getJobsForDay(date);
-
-    const usedMinutes = dayJobs.reduce((sum, job) => {
-      const remaining = job.quantity_needed - job.quantity_completed;
-      const printTimePerBatch = job.part?.print_time_minutes || 60;
-      return sum + (remaining * printTimePerBatch);
-    }, 0);
-
-    return {
-      used: Math.min(usedMinutes, totalMinutes),
-      total: totalMinutes,
-      percentage: Math.min(Math.round((usedMinutes / totalMinutes) * 100), 100),
-    };
-  };
-
-  // Jobs past deadline
-  const jobsPastDeadline = scheduledJobs.filter(job => job.isPastDeadline);
-
-  // Today's jobs
-  const todayJobs = getJobsForDay(new Date());
-  const todayCapacity = getDayCapacity(new Date());
-
-  // Selected day's jobs
-  const selectedDayJobs = getJobsForDay(selectedDate);
-  const selectedDayCapacity = getDayCapacity(selectedDate);
-
-  const getStatusColor = () => {
-    return 'border-l-[#999184] bg-[#999184]/10';
-  };
-
-  const getStatusBadge = (status: string, isPastDeadline: boolean) => {
-    if (isPastDeadline) {
-      return <Badge className="bg-orange-100 text-orange-700">Past Deadline</Badge>;
-    }
-    switch (status) {
-      case 'printing':
-        return <Badge className="bg-[#999184]/20 text-[#7a756a]">Printing</Badge>;
-      case 'queued':
-        return <Badge className="bg-yellow-100 text-yellow-700">Queued</Badge>;
-      case 'completed':
-        return <Badge className="bg-green-100 text-green-700">Completed</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
-
-  const getPriorityIndicator = (priority: string) => {
-    if (priority === 'critical') {
-      return <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />;
-    }
-    if (priority === 'rush') {
-      return <div className="w-2 h-2 rounded-full bg-yellow-500" />;
-    }
-    return null;
   };
 
   const getPriorityBadge = (priority: string) => {
@@ -150,20 +166,210 @@ export default function SchedulePage() {
     return <Badge variant="outline">Normal</Badge>;
   };
 
+  const getPriorityIndicator = (priority: string) => {
+    if (priority === 'critical') {
+      return <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />;
+    }
+    if (priority === 'rush') {
+      return <div className="w-2 h-2 rounded-full bg-yellow-500" />;
+    }
+    return null;
+  };
+
+  const renderDemandCard = (item: NonNullable<typeof demandData>[number], showPriority = false) => {
+    const highestPriority = item.orders.reduce((best, o) => {
+      if (o.priority === 'critical') return 'critical';
+      if (o.priority === 'rush' && best !== 'critical') return 'rush';
+      return best;
+    }, 'normal' as string);
+
+    const earliestDue = item.orders
+      .filter(o => o.dueDate)
+      .map(o => new Date(o.dueDate!))
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+
+    const hasGcodeMapping = gcodeMappings?.some(m => m.part_id === item.part.id && m.is_active);
+
+    return (
+      <Card
+        key={item.part.id}
+        className={`overflow-hidden border-l-4 ${
+          highestPriority === 'critical'
+            ? 'border-l-orange-500 bg-orange-50/30'
+            : highestPriority === 'rush'
+            ? 'border-l-yellow-500 bg-yellow-50/30'
+            : 'border-l-gray-300'
+        }`}
+      >
+        <CardContent className="p-4">
+          {/* Part header */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {getPriorityIndicator(highestPriority)}
+              <div>
+                <h3 className="font-semibold text-gray-900">{item.part.name}</h3>
+                <p className="text-xs text-gray-500">
+                  {item.part.material_type} • {item.part.color || 'No color'}
+                </p>
+              </div>
+            </div>
+            {showPriority && getPriorityBadge(highestPriority)}
+          </div>
+
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-white rounded-lg p-2 border">
+              <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                <Target className="h-3 w-3" />
+                Deficit
+              </div>
+              <p className="text-lg font-bold text-gray-900">{item.deficit} parts</p>
+            </div>
+            <div className="bg-white rounded-lg p-2 border">
+              <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                <Printer className="h-3 w-3" />
+                Prints Needed
+              </div>
+              <p className="text-lg font-bold text-[#7a756a]">{item.printsRequired}</p>
+            </div>
+          </div>
+
+          {/* Details */}
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center justify-between text-gray-600">
+              <span className="flex items-center gap-1">
+                <Layers className="h-3.5 w-3.5" />
+                Parts per print
+              </span>
+              <span className="font-medium">{item.part.parts_per_print || 1}</span>
+            </div>
+
+            <div className="flex items-center justify-between text-gray-600">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                Print time
+              </span>
+              <span className="font-medium">
+                {formatPrintTime(item.part.print_time_minutes || 60)} / print
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-gray-600">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                Total time
+              </span>
+              <span className="font-medium">
+                {formatPrintTime(item.printsRequired * (item.part.print_time_minutes || 60))}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-gray-600">
+              <span className="flex items-center gap-1">
+                <Box className="h-3.5 w-3.5" />
+                Available
+              </span>
+              <span className="font-medium">{item.availableInventory} parts</span>
+            </div>
+
+            {earliestDue && (
+              <div className="flex items-center justify-between text-gray-600">
+                <span className="flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Earliest due
+                </span>
+                <span className={`font-medium ${
+                  earliestDue < new Date() ? 'text-orange-600' : ''
+                }`}>
+                  {format(earliestDue, 'MMM d')}
+                </span>
+              </div>
+            )}
+
+            {/* Gcode mapping status */}
+            <div className="flex items-center justify-between text-gray-600">
+              <span className="flex items-center gap-1">
+                <FileCode className="h-3.5 w-3.5" />
+                Gcode mapping
+              </span>
+              {hasGcodeMapping ? (
+                <span className="flex items-center gap-1 text-green-600 font-medium">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Configured
+                </span>
+              ) : (
+                <Link
+                  href={`/dashboard/parts/${item.part.id}`}
+                  className="flex items-center gap-1 text-orange-600 font-medium hover:underline"
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Not set
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {/* Orders waiting */}
+          <div className="mt-3 pt-3 border-t">
+            <p className="text-xs text-gray-500 mb-2">
+              {item.orders.length} order{item.orders.length !== 1 ? 's' : ''} waiting:
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {item.orders.slice(0, 5).map((order) => (
+                <Link
+                  key={order.orderId}
+                  href={`/dashboard/orders/${order.orderId}`}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs hover:opacity-80 ${
+                    order.priority === 'critical'
+                      ? 'bg-orange-100 text-orange-700'
+                      : order.priority === 'rush'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  {getPriorityIndicator(order.priority)}
+                  <span>{order.quantityNeeded} parts</span>
+                </Link>
+              ))}
+              {item.orders.length > 5 && (
+                <span className="text-xs text-gray-400 px-2 py-1">
+                  +{item.orders.length - 5} more
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Log print button */}
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-3"
+              onClick={() => openLogPrintDialog(item)}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Log Print
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Production Schedule</h1>
-            <p className="text-gray-500">Auto-scheduled based on printer capacity</p>
+            <p className="text-gray-500">What needs to be printed based on order demand</p>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Skeleton className="h-96 w-full" />
-          </div>
-          <Skeleton className="h-96 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-64" />)}
         </div>
       </div>
     );
@@ -175,7 +381,7 @@ export default function SchedulePage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Production Schedule</h1>
-            <p className="text-gray-500">Auto-scheduled based on printer capacity</p>
+            <p className="text-gray-500">What needs to be printed based on order demand</p>
           </div>
         </div>
         <Card>
@@ -188,7 +394,7 @@ export default function SchedulePage() {
     );
   }
 
-  const isSelectedToday = checkIsToday(selectedDate);
+  const availablePrinters = printers?.filter(p => p.status === 'idle' || p.status === 'printing') || [];
 
   return (
     <div className="space-y-6">
@@ -196,483 +402,287 @@ export default function SchedulePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Production Schedule</h1>
-          <p className="text-gray-500">Auto-scheduled based on printer capacity</p>
+          <p className="text-gray-500">What needs to be printed based on order demand</p>
         </div>
       </div>
 
-      {/* Capacity info */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-              <Printer className="h-5 w-5 text-gray-600" />
+            <div className="h-10 w-10 rounded-lg bg-[#999184]/20 flex items-center justify-center">
+              <Printer className="h-5 w-5 text-[#7a756a]" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Available Printers</p>
-              <p className="text-xl font-bold">{availablePrinters.length} of {printers.length}</p>
+              <p className="text-sm text-gray-500">Prints Needed</p>
+              <p className="text-xl font-bold">{stats.totalPrintsNeeded}</p>
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+              <Package className="h-5 w-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Parts Needed</p>
+              <p className="text-xl font-bold">{stats.totalPartsNeeded}</p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
             <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
               <Clock className="h-5 w-5 text-gray-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Daily Capacity</p>
-              <p className="text-xl font-bold">{availablePrinters.length * 8}h ({availablePrinters.length} × 8h)</p>
+              <p className="text-sm text-gray-500">Est. Print Time</p>
+              <p className="text-xl font-bold">{formatPrintTime(stats.totalTimeMinutes)}</p>
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardContent className="p-4 flex items-center gap-4">
             <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${
-              jobsPastDeadline.length > 0 ? 'bg-orange-100' : 'bg-gray-100'
+              stats.criticalItems > 0 ? 'bg-orange-100' : 'bg-gray-100'
             }`}>
               <AlertTriangle className={`h-5 w-5 ${
-                jobsPastDeadline.length > 0 ? 'text-orange-600' : 'text-gray-600'
+                stats.criticalItems > 0 ? 'text-orange-600' : 'text-gray-600'
               }`} />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Jobs Past Deadline</p>
-              <p className={`text-xl font-bold ${jobsPastDeadline.length > 0 ? 'text-orange-600' : ''}`}>
-                {jobsPastDeadline.length}
+              <p className="text-sm text-gray-500">Critical Items</p>
+              <p className={`text-xl font-bold ${stats.criticalItems > 0 ? 'text-orange-600' : ''}`}>
+                {stats.criticalItems}
               </p>
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Deadline warnings */}
-      {jobsPastDeadline.length > 0 && (
-        <Card className="border-orange-200 bg-orange-50/50">
-          <CardHeader className="py-3">
-            <CardTitle className="text-base flex items-center gap-2 text-orange-800">
-              <AlertCircle className="h-4 w-4" />
-              Jobs Scheduled Past Deadline ({jobsPastDeadline.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex flex-wrap gap-2">
-              {jobsPastDeadline.map((job) => (
-                <Link
-                  key={job.id}
-                  href={`/dashboard/orders/${job.production_order_id}`}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-orange-200 text-sm hover:bg-orange-50 transition-colors"
-                >
-                  {getPriorityIndicator(job.production_order?.priority || 'normal')}
-                  <span className="font-medium">{job.part?.name}</span>
-                  <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700">
-                    Due: {job.production_order?.due_date
-                      ? format(new Date(job.production_order.due_date), 'MMM d')
-                      : 'N/A'}
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    Est: {format(job.estimatedEndDate, 'MMM d')}
-                  </Badge>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Main content: Today's detail + Month calendar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-        {/* Today's Detailed View */}
-        <Card className="lg:col-span-1 lg:row-span-2 overflow-hidden py-6 mb-2 gap-3">
-          <CardHeader className={`${isSelectedToday ? 'bg-[#999184]/10 border-b border-[#999184]/20' : 'bg-gray-50 border-b'} -mx-4 -mt-6 px-8 pt-3 pb-3 rounded-t-xl`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm font-medium pt-2 ${isSelectedToday ? 'text-[#7a756a]' : 'text-gray-500'}`}>
-                  {isSelectedToday ? "Today's Schedule" : format(selectedDate, 'EEEE')}
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {format(selectedDate, 'MMMM d, yyyy')}
-                </p>
-              </div>
-              {isSelectedToday && (
-                <div className="h-12 w-12 rounded-full bg-[#999184] text-white flex items-center justify-center text-lg font-bold">
-                  {format(new Date(), 'd')}
-                </div>
-              )}
-            </div>
-            {!isWeekend(selectedDate) && (
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="text-gray-500">Capacity</span>
-                  <span className="font-medium">{selectedDayCapacity.percentage}% booked</span>
-                </div>
-                <Progress value={selectedDayCapacity.percentage} className="h-2" />
-              </div>
-            )}
-          </CardHeader>
-          <CardContent className="p-3 max-h-[500px] overflow-y-auto">
-            {isWeekend(selectedDate) ? (
-              <div className="text-center py-8 text-gray-400">
-                <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>Weekend - No production scheduled</p>
-              </div>
-            ) : selectedDayJobs.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No jobs scheduled for this day</p>
-              </div>
-            ) : (
-              <div>
-                {selectedDayJobs.map((job) => {
-                  const progress = job.quantity_needed > 0
-                    ? Math.round((job.quantity_completed / job.quantity_needed) * 100)
-                    : 0;
-                  const remaining = job.quantity_needed - job.quantity_completed;
-
-                  // Calculate print cycles
-                  const partsPerPrint = job.part?.parts_per_print || 1;
-                  const printTimePerCycle = job.part?.print_time_minutes || 60;
-                  const totalPrintsNeeded = Math.ceil(job.quantity_needed / partsPerPrint);
-                  const printsCompleted = Math.floor(job.quantity_completed / partsPerPrint);
-                  const printsRemaining = Math.ceil(remaining / partsPerPrint);
-
-                  // Calculate prints for THIS specific day
-                  // Based on available working hours (8h = 480min per day) × number of printers
-                  const workingMinutesPerDay = 8 * 60;
-                  const printsPerPrinterPerDay = Math.floor(workingMinutesPerDay / printTimePerCycle);
-                  const numPrinters = Math.max(availablePrinters.length, 1);
-                  const totalPrintsPerDay = printsPerPrinterPerDay * numPrinters;
-
-                  // Calculate which day of the job this is
-                  const jobStartDay = startOfDay(job.scheduledDate);
-                  const selectedDay = startOfDay(selectedDate);
-                  const daysSinceJobStart = Math.floor((selectedDay.getTime() - jobStartDay.getTime()) / (1000 * 60 * 60 * 24));
-
-                  // Calculate prints already done in previous days of this job
-                  const printsDoneInPreviousDays = Math.min(daysSinceJobStart * totalPrintsPerDay, printsRemaining);
-                  const printsRemainingAfterPreviousDays = Math.max(0, printsRemaining - printsDoneInPreviousDays);
-
-                  // Prints scheduled for this specific day (across all printers)
-                  const printsForThisDay = Math.min(totalPrintsPerDay, printsRemainingAfterPreviousDays);
-                  const printTimeForThisDay = Math.ceil(printsForThisDay / numPrinters) * printTimePerCycle;
-
-                  return (
-                    <Link
-                      key={job.id}
-                      href={`/dashboard/orders/${job.production_order_id}`}
-                      className={`block p-3 rounded-lg border-l-4 ${getStatusColor()} hover:shadow-md transition-shadow`}
-                    >
-                      <div className="flex items-start justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          {getPriorityIndicator(job.production_order?.priority || 'normal')}
-                          <span className="font-semibold text-gray-900">
-                            {job.part?.name}
-                          </span>
-                        </div>
-                        {getStatusBadge(job.status, job.isPastDeadline)}
-                      </div>
-
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center justify-between text-gray-600">
-                          <span>Order</span>
-                          <span className="font-medium">
-                            {job.production_order?.shopify_order_number || job.production_order?.id.slice(0, 8) || 'N/A'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-gray-600">
-                          <span>Product</span>
-                          <span className="font-medium">
-                            {job.production_order?.product?.name || 'N/A'}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-gray-600">
-                          <span>Priority</span>
-                          {getPriorityBadge(job.production_order?.priority || 'normal')}
-                        </div>
-
-                        {/* Parts progress */}
-                        <div className="flex items-center justify-between text-gray-600">
-                          <span>Parts Progress</span>
-                          <span className="font-medium">
-                            {job.quantity_completed} / {job.quantity_needed} parts
-                          </span>
-                        </div>
-
-                        <Progress value={progress} className="h-2" />
-
-                        {/* Print cycles for THIS DAY */}
-                        <div className="bg-[#999184]/10 border border-[#999184]/30 rounded-lg p-2 space-y-1">
-                          <div className="flex items-center justify-between text-[#7a756a]">
-                            <span className="flex items-center gap-1 font-medium">
-                              <Printer className="h-3.5 w-3.5" />
-                              Prints for This Day
-                            </span>
-                            <span className="font-bold text-[#5a5650] text-lg">
-                              {printsForThisDay}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-[#7a756a]">
-                            <span>~{formatPrintTime(printTimeForThisDay)} of printing</span>
-                            <span>{partsPerPrint * printsForThisDay} parts</span>
-                          </div>
-                        </div>
-
-                        {/* Total job progress */}
-                        <div className="bg-gray-100 rounded-lg p-2 space-y-1">
-                          <div className="flex items-center justify-between text-gray-700">
-                            <span className="text-xs">Total Job Progress</span>
-                            <span className="font-medium text-gray-900">
-                              {printsCompleted} / {totalPrintsNeeded} prints
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>{partsPerPrint} part{partsPerPrint !== 1 ? 's' : ''} per print</span>
-                            <span className="font-medium">
-                              {printsRemaining} print{printsRemaining !== 1 ? 's' : ''} remaining total
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between text-gray-600">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            Total Time Remaining
-                          </span>
-                          <span className="font-medium">
-                            {formatPrintTime(printsRemaining * printTimePerCycle)}
-                          </span>
-                        </div>
-
-                        {job.production_order?.due_date && (
-                          <div className="flex items-center justify-between text-gray-600">
-                            <span>Due Date</span>
-                            <span className={`font-medium ${job.isPastDeadline ? 'text-orange-600' : ''}`}>
-                              {format(new Date(job.production_order.due_date), 'MMM d, yyyy')}
-                            </span>
-                          </div>
-                        )}
-
-                        {job.printer && (
-                          <div className="flex items-center justify-between text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Printer className="h-3.5 w-3.5" />
-                              Printer
-                            </span>
-                            <span className="font-medium">{job.printer.name}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-2 pt-2 border-t flex items-center justify-end text-[#7a756a] text-sm">
-                        <span>View Order</span>
-                        <ArrowRight className="h-4 w-4 ml-1" />
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Month Calendar */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                {format(currentMonth, 'MMMM yyyy')}
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setCurrentMonth(new Date());
-                    setSelectedDate(new Date());
-                  }}
-                >
-                  Today
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                <div
-                  key={day}
-                  className="text-center text-xs font-medium text-gray-500 py-2"
-                >
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {calendarDays.map((day) => {
-                const dayJobs = getJobsForDay(day);
-                const isCurrentMonth = isSameMonth(day, currentMonth);
-                const isToday = checkIsToday(day);
-                const isSelected = isSameDay(day, selectedDate);
-                const isWeekendDay = isWeekend(day);
-                const capacity = getDayCapacity(day);
-                const hasPastDeadline = dayJobs.some(j => j.isPastDeadline);
-                const hasPrinting = dayJobs.some(j => j.status === 'printing');
-
-                return (
-                  <button
-                    key={day.toISOString()}
-                    onClick={() => setSelectedDate(day)}
-                    className={`
-                      relative p-2 min-h-[80px] rounded-lg border text-left transition-all
-                      ${isSelected ? 'ring-2 ring-[#999184] border-[#999184]/50' : 'border-gray-200'}
-                      ${isToday ? 'bg-[#999184]/10' : isWeekendDay ? 'bg-gray-50' : 'bg-white'}
-                      ${!isCurrentMonth ? 'opacity-40' : ''}
-                      ${isWeekendDay ? 'opacity-60' : ''}
-                      hover:border-[#999184]/50 hover:shadow-sm
-                    `}
-                  >
-                    <div className={`
-                      text-sm font-medium mb-1
-                      ${isToday ? 'text-[#7a756a]' : 'text-gray-900'}
-                    `}>
-                      {format(day, 'd')}
-                    </div>
-
-                    {!isWeekendDay && isCurrentMonth && (
-                      <>
-                        {/* Capacity bar */}
-                        {dayJobs.length > 0 && (
-                          <div className="mb-1">
-                            <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${
-                                  capacity.percentage > 90
-                                    ? 'bg-orange-500'
-                                    : capacity.percentage > 70
-                                    ? 'bg-yellow-500'
-                                    : 'bg-green-500'
-                                }`}
-                                style={{ width: `${capacity.percentage}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Job indicators */}
-                        <div className="flex flex-wrap gap-0.5">
-                          {dayJobs.slice(0, 4).map((job) => (
-                            <div
-                              key={job.id}
-                              className={`
-                                w-2 h-2 rounded-full
-                                ${job.isPastDeadline
-                                  ? 'bg-orange-500'
-                                  : job.status === 'printing'
-                                  ? 'bg-[#999184]'
-                                  : 'bg-yellow-500'
-                                }
-                              `}
-                              title={job.part?.name}
-                            />
-                          ))}
-                          {dayJobs.length > 4 && (
-                            <span className="text-xs text-gray-400">
-                              +{dayJobs.length - 4}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Status indicators */}
-                        {dayJobs.length > 0 && (
-                          <div className="mt-1 text-xs text-gray-500">
-                            {dayJobs.length} job{dayJobs.length !== 1 ? 's' : ''}
-                          </div>
-                        )}
-
-                        {/* Alert indicator */}
-                        {hasPastDeadline && (
-                          <div className="absolute top-1 right-1">
-                            <AlertCircle className="h-3 w-3 text-orange-500" />
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {isWeekendDay && isCurrentMonth && (
-                      <div className="text-xs text-gray-400 mt-1">Off</div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-yellow-500" />
-          <span>Queued</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#999184]" />
-          <span>Printing</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-orange-500" />
-          <span>Past Deadline</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-          <span>Critical Priority</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-yellow-500" />
-          <span>Rush Priority</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 w-6 bg-green-500 rounded-full" />
-          <span>&lt;70% capacity</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 w-6 bg-yellow-500 rounded-full" />
-          <span>70-90% capacity</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 w-6 bg-orange-500 rounded-full" />
-          <span>&gt;90% capacity</span>
-        </div>
-      </div>
-
-      {/* Empty state */}
-      {scheduledJobs.length === 0 && (
         <Card>
-          <CardContent className="p-12 text-center">
-            <Calendar className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-500">No jobs to schedule</p>
-            <p className="text-sm text-gray-400 mt-1">
-              Create orders to see them automatically scheduled here
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
+              <Printer className="h-5 w-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Linked Printers</p>
+              <p className="text-xl font-bold">{availablePrinters.length} active / {printers?.length || 0} linked</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Empty state - check if orders need allocation migration */}
+      {demandData?.length === 0 && hasOrdersNeedingMigration && (
+        <Card className="border-yellow-200 bg-yellow-50/50">
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
+            <p className="text-lg font-medium text-gray-900">Orders Need Setup</p>
+            <p className="text-gray-600 mt-1">
+              {ordersWithoutAllocations.length} existing order{ordersWithoutAllocations.length !== 1 ? 's' : ''} need part allocations to show demand.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              New orders will automatically track demand. For existing orders,
+              you can re-save them or wait for the next database sync.
             </p>
           </CardContent>
         </Card>
       )}
+
+      {/* Empty state - truly all caught up */}
+      {demandData?.length === 0 && !hasOrdersNeedingMigration && (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
+            <p className="text-lg font-medium text-gray-900">All caught up!</p>
+            <p className="text-gray-500 mt-1">
+              All orders have sufficient inventory. No printing needed.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Critical priority items */}
+      {priorityGroups.critical.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
+            <h2 className="text-lg font-semibold text-gray-900">
+              Critical Priority ({priorityGroups.critical.length})
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {priorityGroups.critical.map(item => renderDemandCard(item))}
+          </div>
+        </div>
+      )}
+
+      {/* Rush priority items */}
+      {priorityGroups.rush.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-3 h-3 rounded-full bg-yellow-500" />
+            <h2 className="text-lg font-semibold text-gray-900">
+              Rush Priority ({priorityGroups.rush.length})
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {priorityGroups.rush.map(item => renderDemandCard(item))}
+          </div>
+        </div>
+      )}
+
+      {/* Normal priority items */}
+      {priorityGroups.normal.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Normal Priority ({priorityGroups.normal.length})
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {priorityGroups.normal.map(item => renderDemandCard(item))}
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      {demandData && demandData.length > 0 && (
+        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
+            <span>Critical Priority</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-500" />
+            <span>Rush Priority</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <span>Gcode mapping configured</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <span>Gcode mapping missing (won&apos;t auto-track)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Log Print Dialog */}
+      <Dialog
+        open={logPrintDialog?.open || false}
+        onOpenChange={(open) => !open && setLogPrintDialog(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Log Print Completion</DialogTitle>
+            <DialogDescription>
+              Record a print for {logPrintDialog?.partName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Print Status</Label>
+              <Select
+                value={logPrintStatus}
+                onValueChange={(value: 'success' | 'failed') => setLogPrintStatus(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="success">
+                    <span className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      Success
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="failed">
+                    <span className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      Failed
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Number of Prints</Label>
+              <Input
+                type="number"
+                min={1}
+                value={logPrintQty}
+                onChange={(e) => setLogPrintQty(parseInt(e.target.value) || 1)}
+              />
+              {logPrintStatus === 'success' && (
+                <p className="text-xs text-gray-500">
+                  {logPrintQty} print{logPrintQty !== 1 ? 's' : ''} × {logPrintDialog?.partsPerPrint || 1} parts/print = {' '}
+                  <span className="font-medium">{logPrintQty * (logPrintDialog?.partsPerPrint || 1)} parts</span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Printer (optional)</Label>
+              <Select
+                value={logPrintPrinterId}
+                onValueChange={setLogPrintPrinterId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select printer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {printers?.map((printer) => (
+                    <SelectItem key={printer.id} value={printer.id}>
+                      {printer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {logPrintDialog?.gcodeMappingFilename && (
+              <div className="p-3 bg-gray-50 rounded-lg text-sm">
+                <p className="text-gray-500">Gcode file:</p>
+                <p className="font-mono text-gray-700">{logPrintDialog.gcodeMappingFilename}</p>
+              </div>
+            )}
+
+            {logPrintStatus === 'success' && (
+              <div className="p-3 bg-green-50 rounded-lg text-sm text-green-800">
+                <p className="font-medium">
+                  This will add {logPrintQty * (logPrintDialog?.partsPerPrint || 1)} parts to inventory
+                </p>
+                <p className="text-green-600 text-xs mt-1">
+                  Inventory will auto-allocate to waiting orders
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setLogPrintDialog(null)}
+              disabled={isLogging}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLogPrint}
+              disabled={isLogging}
+            >
+              {isLogging ? 'Logging...' : 'Log Print'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { useInventory, useUpdateInventory } from '@/hooks/useInventory';
+import { useLogInventoryPrint } from '@/hooks/useInventoryFulfillment';
+import { usePrinters } from '@/hooks/usePrinters';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +26,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -33,8 +42,161 @@ import {
   AlertTriangle,
   CheckCircle,
   Loader2,
+  Plus,
+  Printer,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+interface LogPrintDialogProps {
+  open: boolean;
+  onClose: () => void;
+  partId: string;
+  partName: string;
+  partsPerPrint: number;
+}
+
+function LogPrintDialog({
+  open,
+  onClose,
+  partId,
+  partName,
+  partsPerPrint,
+}: LogPrintDialogProps) {
+  const [printCount, setPrintCount] = useState('1');
+  const [status, setStatus] = useState<'success' | 'failed'>('success');
+  const [printerId, setPrinterId] = useState<string>('');
+  const logPrint = useLogInventoryPrint();
+  const { data: printers } = usePrinters();
+
+  const handleSubmit = async () => {
+    const qty = parseInt(printCount);
+    if (isNaN(qty) || qty < 1) {
+      toast.error('Please enter a valid number of prints');
+      return;
+    }
+
+    const partsProduced = status === 'success' ? qty * partsPerPrint : 0;
+
+    try {
+      await logPrint.mutateAsync({
+        part_id: partId,
+        quantity_printed: partsProduced,
+        status,
+        printer_id: printerId || undefined,
+      });
+      toast.success(
+        status === 'success'
+          ? `Added ${partsProduced} ${partName} to inventory`
+          : `Logged ${qty} failed print(s)`
+      );
+      onClose();
+      setPrintCount('1');
+      setStatus('success');
+      setPrinterId('');
+    } catch {
+      toast.error('Failed to log print');
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Log Print Completion</DialogTitle>
+          <DialogDescription>
+            Record a completed print for {partName}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Print Status</Label>
+            <Select
+              value={status}
+              onValueChange={(value: 'success' | 'failed') => setStatus(value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="success">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    Success
+                  </span>
+                </SelectItem>
+                <SelectItem value="failed">
+                  <span className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-red-600" />
+                    Failed
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="printCount">Number of Prints</Label>
+            <Input
+              id="printCount"
+              type="number"
+              min="1"
+              value={printCount}
+              onChange={(e) => setPrintCount(e.target.value)}
+            />
+            {status === 'success' && (
+              <p className="text-xs text-gray-500">
+                {printCount} print{parseInt(printCount) !== 1 ? 's' : ''} × {partsPerPrint} parts/print ={' '}
+                <span className="font-medium">
+                  {(parseInt(printCount) || 0) * partsPerPrint} parts
+                </span>
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Printer (optional)</Label>
+            <Select value={printerId} onValueChange={setPrinterId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select printer" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                {printers?.map((printer) => (
+                  <SelectItem key={printer.id} value={printer.id}>
+                    {printer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {status === 'success' && (
+            <div className="p-3 bg-green-50 rounded-lg text-sm text-green-800">
+              <p className="font-medium">
+                This will add {(parseInt(printCount) || 0) * partsPerPrint} parts to inventory
+              </p>
+              <p className="text-green-600 text-xs mt-1">
+                Inventory will auto-allocate to waiting orders
+              </p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={logPrint.isPending}>
+            {logPrint.isPending && (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            )}
+            Log Print
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 interface AdjustmentDialogProps {
   open: boolean;
@@ -130,6 +292,11 @@ export default function InventoryPage() {
     partId: string;
     partName: string;
     quantity: number;
+  } | null>(null);
+  const [loggingPrint, setLoggingPrint] = useState<{
+    partId: string;
+    partName: string;
+    partsPerPrint: number;
   } | null>(null);
   const { canEdit } = useAuth();
   const { data: inventory, isLoading } = useInventory();
@@ -340,19 +507,36 @@ export default function InventoryPage() {
                     </TableCell>
                     {canEdit && (
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setAdjusting({
-                              partId: item.part_id,
-                              partName: item.part.name,
-                              quantity: item.quantity_on_hand,
-                            })
-                          }
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setLoggingPrint({
+                                partId: item.part_id,
+                                partName: item.part.name,
+                                partsPerPrint: item.part.parts_per_print || 1,
+                              })
+                            }
+                            title="Log print"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setAdjusting({
+                                partId: item.part_id,
+                                partName: item.part.name,
+                                quantity: item.quantity_on_hand,
+                              })
+                            }
+                            title="Adjust quantity"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
@@ -372,6 +556,18 @@ export default function InventoryPage() {
           partId={adjusting.partId}
           partName={adjusting.partName}
           currentQuantity={adjusting.quantity}
+        />
+      )}
+
+      {/* Log print dialog */}
+      {loggingPrint && (
+        <LogPrintDialog
+          key={loggingPrint.partId}
+          open={!!loggingPrint}
+          onClose={() => setLoggingPrint(null)}
+          partId={loggingPrint.partId}
+          partName={loggingPrint.partName}
+          partsPerPrint={loggingPrint.partsPerPrint}
         />
       )}
     </div>

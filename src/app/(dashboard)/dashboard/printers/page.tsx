@@ -2,7 +2,14 @@
 
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { usePrinters, useCreatePrinter, useUpdatePrinterStatus, useDeletePrinter } from '@/hooks/usePrinters';
+import { useCreatePrinter, useUpdatePrinterStatus, useDeletePrinter } from '@/hooks/usePrinters';
+import {
+  usePrintersWithBambuState,
+  formatTemperature,
+  formatTimeRemaining,
+  formatGcodeState,
+  PrinterWithBambuState,
+} from '@/hooks/useBambu';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,12 +50,15 @@ import {
   AlertCircle,
   Wrench,
   Play,
-  Pause,
   Trash2,
   Loader2,
+  Thermometer,
+  Layers,
+  Clock,
+  Signal,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PrinterStatus } from '@/types/database';
+import { PrinterStatus, BambuPrinterState } from '@/types/database';
 
 function AddPrinterDialog() {
   const [open, setOpen] = useState(false);
@@ -149,7 +159,7 @@ function AddPrinterDialog() {
 
 export default function PrintersPage() {
   const { canEdit, isAdmin } = useAuth();
-  const { data: printers, isLoading, error } = usePrinters();
+  const { data: printers, isLoading, error } = usePrintersWithBambuState();
   const updateStatus = useUpdatePrinterStatus();
   const deletePrinter = useDeletePrinter();
 
@@ -244,9 +254,9 @@ export default function PrintersPage() {
   }
 
   // Group printers by status
-  const activePrinters = printers?.filter((p) => p.status === 'printing') || [];
-  const idlePrinters = printers?.filter((p) => p.status === 'idle') || [];
-  const otherPrinters = printers?.filter((p) =>
+  const activePrinters = printers?.filter((p: PrinterWithBambuState) => p.status === 'printing') || [];
+  const idlePrinters = printers?.filter((p: PrinterWithBambuState) => p.status === 'idle') || [];
+  const otherPrinters = printers?.filter((p: PrinterWithBambuState) =>
     !['printing', 'idle'].includes(p.status)
   ) || [];
 
@@ -320,7 +330,7 @@ export default function PrintersPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {printers?.map((printer) => {
+          {printers?.map((printer: PrinterWithBambuState) => {
             const currentJob = printer.current_job;
             const progress = currentJob
               ? Math.round(
@@ -398,11 +408,76 @@ export default function PrintersPage() {
                   )}
                 </CardHeader>
                 <CardContent>
-                  <Badge className={getStatusColor(printer.status)} variant="secondary">
-                    {printer.status}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={getStatusColor(printer.status)} variant="secondary">
+                      {printer.status}
+                    </Badge>
+                    {printer.bambu_device_id && (
+                      <Badge variant="outline" className="text-xs">
+                        <Signal className="h-3 w-3 mr-1" />
+                        Bambu
+                      </Badge>
+                    )}
+                  </div>
 
-                  {currentJob && printer.status === 'printing' && (
+                  {/* Bambu Real-time Data */}
+                  {printer.bambu_state && printer.bambu_state.online && (
+                    <div className="mt-4 space-y-3">
+                      {/* Temperature Display */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Thermometer className="h-3 w-3 text-orange-500" />
+                          <span>Nozzle:</span>
+                          <span className="font-medium">
+                            {formatTemperature(printer.bambu_state.nozzle_temp, printer.bambu_state.nozzle_target)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-gray-600">
+                          <Thermometer className="h-3 w-3 text-blue-500" />
+                          <span>Bed:</span>
+                          <span className="font-medium">
+                            {formatTemperature(printer.bambu_state.bed_temp, printer.bambu_state.bed_target)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Print Progress from Bambu */}
+                      {['RUNNING', 'PREPARE', 'PAUSE'].includes(printer.bambu_state.gcode_state || '') && (
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium text-gray-900 truncate flex-1 mr-2">
+                              {printer.bambu_state.subtask_name || printer.bambu_state.gcode_file || 'Printing...'}
+                            </p>
+                            <span className="text-xs text-gray-500 shrink-0">
+                              {formatGcodeState(printer.bambu_state.gcode_state)}
+                            </span>
+                          </div>
+                          <Progress value={printer.bambu_state.print_percent || 0} className="h-2 mb-2" />
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span className="flex items-center gap-1">
+                              <Layers className="h-3 w-3" />
+                              {printer.bambu_state.current_layer || 0} / {printer.bambu_state.total_layers || 0}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {formatTimeRemaining(printer.bambu_state.time_remaining_min)}
+                            </span>
+                            <span>{printer.bambu_state.print_percent || 0}%</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show gcode state for idle printers */}
+                      {printer.bambu_state.gcode_state === 'IDLE' && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          Ready to print
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Fallback: Job progress from database (non-Bambu printers) */}
+                  {!printer.bambu_state && currentJob && printer.status === 'printing' && (
                     <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                       <p className="text-sm font-medium text-gray-900 mb-2">
                         {currentJob.part?.name}
@@ -433,16 +508,17 @@ export default function PrintersPage() {
       )}
 
       {/* Bambu Labs integration notice */}
-      <Card className="bg-gray-50 border-gray-200">
+      <Card className="bg-green-50 border-green-200">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-              <Printer className="h-5 w-5 text-gray-600" />
+            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+              <Signal className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="font-medium text-gray-900">Bambu Labs Integration</p>
+              <p className="font-medium text-gray-900">Bambu Labs Cloud Integration</p>
               <p className="text-sm text-gray-600 mt-1">
-                Automatic printer status tracking and print completion logging will be available in a future update. For now, manually update printer status and log prints from the order detail page.
+                Real-time printer monitoring is available! Link your printers by adding their Bambu Device ID in the database.
+                Run the Python service locally to receive live status updates, temperature data, and automatic print completion tracking.
               </p>
             </div>
           </div>

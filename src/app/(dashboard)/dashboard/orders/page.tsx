@@ -57,6 +57,8 @@ import {
   CheckCircle,
   XCircle,
   Pencil,
+  Package,
+  PackageCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { OrderStatus, OrderPriority } from '@/types/database';
@@ -426,6 +428,7 @@ export default function OrdersPage() {
                     <TableHead>Priority</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Fulfillment</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="w-[80px]"></TableHead>
                   </TableRow>
@@ -490,6 +493,24 @@ export default function OrdersPage() {
                           {order.status.replace('_', ' ')}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {order.fulfillment_status === 'fulfilled' ? (
+                          <Badge className="bg-green-100 text-green-700">
+                            <PackageCheck className="h-3 w-3 mr-1" />
+                            Fulfilled
+                          </Badge>
+                        ) : order.fulfillment_status === 'partially_fulfilled' ? (
+                          <Badge className="bg-[#999184]/20 text-[#7a756a]">
+                            <Package className="h-3 w-3 mr-1" />
+                            Partial
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-gray-500">
+                            <Package className="h-3 w-3 mr-1" />
+                            Unfulfilled
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm text-gray-500">
                         {formatDistanceToNow(new Date(order.created_at), {
                           addSuffix: true,
@@ -553,7 +574,7 @@ export default function OrdersPage() {
                   ))}
                   {filteredOrders?.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                         No orders found
                       </TableCell>
                     </TableRow>
