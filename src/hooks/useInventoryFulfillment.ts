@@ -264,6 +264,77 @@ export function useLogInventoryPrint() {
   });
 }
 
+/**
+ * Update a print log entry's status (e.g., mark a success as failed).
+ * Automatically adjusts inventory when changing status.
+ */
+export function useUpdatePrintLogStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      entry,
+      newStatus,
+    }: {
+      entry: {
+        id: string;
+        status: string;
+        quantity_printed: number;
+        part_id: string;
+        part?: { parts_per_print: number } | null;
+      };
+      newStatus: 'success' | 'failed';
+    }) => {
+      if (entry.status === newStatus) return;
+
+      const supabase = createClient();
+
+      if (entry.status === 'success' && newStatus === 'failed') {
+        // Decrement inventory by the parts that were incorrectly added
+        if (entry.quantity_printed > 0) {
+          const { error: rpcError } = await supabase.rpc('increment_inventory', {
+            p_part_id: entry.part_id,
+            p_quantity: -entry.quantity_printed,
+          });
+          if (rpcError) throw rpcError;
+        }
+
+        // Update log entry
+        const { error } = await supabase
+          .from('inventory_print_log')
+          .update({ status: 'failed', quantity_printed: 0 })
+          .eq('id', entry.id);
+        if (error) throw error;
+      } else if (entry.status === 'failed' && newStatus === 'success') {
+        const partsPerPrint = entry.part?.parts_per_print || 1;
+
+        // Increment inventory
+        const { error: rpcError } = await supabase.rpc('increment_inventory', {
+          p_part_id: entry.part_id,
+          p_quantity: partsPerPrint,
+        });
+        if (rpcError) throw rpcError;
+
+        // Update log entry
+        const { error } = await supabase
+          .from('inventory_print_log')
+          .update({ status: 'success', quantity_printed: partsPerPrint })
+          .eq('id', entry.id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory_print_log'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['production_metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations'] });
+      queryClient.invalidateQueries({ queryKey: ['part_demand'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
+    },
+  });
+}
+
 // ============================================================================
 // PART DEMAND (What needs to be printed)
 // ============================================================================

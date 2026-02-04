@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { format } from 'date-fns';
 import { useInventory, useUpdateInventory } from '@/hooks/useInventory';
-import { useLogInventoryPrint } from '@/hooks/useInventoryFulfillment';
+import { useLogInventoryPrint, useInventoryPrintLog, useUpdatePrintLogStatus } from '@/hooks/useInventoryFulfillment';
 import { usePrinters } from '@/hooks/usePrinters';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +46,9 @@ import {
   Plus,
   Printer,
   XCircle,
+  FileText,
+  Scale,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -300,6 +304,8 @@ export default function InventoryPage() {
   } | null>(null);
   const { canEdit } = useAuth();
   const { data: inventory, isLoading } = useInventory();
+  const { data: printLog } = useInventoryPrintLog(100);
+  const updateStatus = useUpdatePrintLogStatus();
 
   const filteredInventory = inventory?.filter((item) =>
     item.part.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -544,6 +550,164 @@ export default function InventoryPage() {
               })}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Print Log */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Print Log
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!printLog || printLog.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No prints logged yet
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Part</TableHead>
+                  <TableHead>Gcode File</TableHead>
+                  <TableHead>
+                    <div className="flex items-center gap-1">
+                      <Printer className="h-4 w-4" />
+                      Printer
+                    </div>
+                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Parts</TableHead>
+                  <TableHead>Prints</TableHead>
+                  <TableHead>
+                    <div className="flex items-center gap-1">
+                      <Scale className="h-4 w-4" />
+                      Material
+                    </div>
+                  </TableHead>
+                  <TableHead>Source</TableHead>
+                  {canEdit && <TableHead className="w-[80px]"></TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {printLog.map((entry) => {
+                  const partsPerPrint = entry.part?.parts_per_print || 1;
+                  const materialPerPrint = entry.part?.material_grams || 0;
+                  const numPrints =
+                    entry.status === 'success' && entry.quantity_printed > 0
+                      ? entry.quantity_printed / partsPerPrint
+                      : entry.status === 'failed'
+                      ? 1
+                      : 0;
+                  const materialUsed = numPrints * materialPerPrint;
+
+                  return (
+                    <TableRow key={entry.id}>
+                      <TableCell className="text-sm text-gray-500 whitespace-nowrap">
+                        {format(new Date(entry.completed_at), 'MMM d, h:mm a')}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {entry.part?.name || 'Unknown'}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-gray-500 max-w-[200px] truncate">
+                        {entry.gcode_filename || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {entry.printer?.name || '-'}
+                      </TableCell>
+                      <TableCell>
+                        {entry.status === 'success' ? (
+                          <Badge className="bg-green-100 text-green-700" variant="secondary">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Success
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-orange-100 text-orange-700" variant="secondary">
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Failed
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {entry.quantity_printed}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {Math.round(numPrints * 10) / 10}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {materialUsed >= 1000
+                          ? `${(materialUsed / 1000).toFixed(2)} kg`
+                          : `${Math.round(materialUsed)}g`}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {entry.source === 'bambu_auto' ? 'Auto' : 'Manual'}
+                        </Badge>
+                      </TableCell>
+                      {canEdit && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={updateStatus.isPending}
+                            onClick={() => {
+                              const newStatus = entry.status === 'success' ? 'failed' : 'success';
+                              const msg =
+                                newStatus === 'failed'
+                                  ? `Mark as failed? This will remove ${entry.quantity_printed} parts from inventory.`
+                                  : `Mark as success? This will add ${entry.part?.parts_per_print || 1} parts to inventory.`;
+                              if (window.confirm(msg)) {
+                                updateStatus.mutate(
+                                  {
+                                    entry: {
+                                      id: entry.id,
+                                      status: entry.status,
+                                      quantity_printed: entry.quantity_printed,
+                                      part_id: entry.part_id,
+                                      part: entry.part
+                                        ? { parts_per_print: entry.part.parts_per_print }
+                                        : null,
+                                    },
+                                    newStatus,
+                                  },
+                                  {
+                                    onSuccess: () => {
+                                      toast.success(
+                                        newStatus === 'failed'
+                                          ? 'Print marked as failed, inventory adjusted'
+                                          : 'Print marked as success, inventory adjusted'
+                                      );
+                                    },
+                                    onError: () => {
+                                      toast.error('Failed to update print status');
+                                    },
+                                  }
+                                );
+                              }
+                            }}
+                            title={
+                              entry.status === 'success'
+                                ? 'Mark as failed'
+                                : 'Mark as success'
+                            }
+                          >
+                            {updateStatus.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

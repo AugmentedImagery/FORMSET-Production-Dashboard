@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useProductionMetrics } from '@/hooks/useDashboard';
+import { useProductionMetrics, EnrichedPrintLogEntry } from '@/hooks/useDashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -61,19 +60,18 @@ export default function AnalyticsPage() {
     );
   }
 
-  // Calculate summary stats (sum quantities instead of counting rows)
-  interface PrintHistoryItem {
-    status: string;
-    material_used_grams: number | null;
-    quantity: number | null;
-  }
-  const totalPrints = metrics?.printHistory?.reduce((sum: number, p: PrintHistoryItem) => sum + (p.quantity || 1), 0) || 0;
-  const successfulPrints = metrics?.printHistory?.reduce((sum: number, p: PrintHistoryItem) =>
-    p.status === 'success' ? sum + (p.quantity || 1) : sum, 0) || 0;
-  const failedPrints = metrics?.printHistory?.reduce((sum: number, p: PrintHistoryItem) =>
-    p.status === 'failed' ? sum + (p.quantity || 1) : sum, 0) || 0;
+  // Calculate summary stats from inventory print log
+  const printLog = metrics?.printLog || [];
+  const totalPrints = printLog.reduce((sum: number, p: EnrichedPrintLogEntry) => sum + p.num_prints, 0);
+  const successfulPrints = printLog
+    .filter((p: EnrichedPrintLogEntry) => p.status === 'success')
+    .reduce((sum: number, p: EnrichedPrintLogEntry) => sum + p.num_prints, 0);
+  const failedPrints = printLog
+    .filter((p: EnrichedPrintLogEntry) => p.status === 'failed')
+    .reduce((sum: number, p: EnrichedPrintLogEntry) => sum + p.num_prints, 0);
   const successRate = totalPrints > 0 ? ((successfulPrints / totalPrints) * 100).toFixed(1) : '100';
-  const totalMaterial = metrics?.printHistory?.reduce((sum: number, p: PrintHistoryItem) => sum + (p.material_used_grams || 0), 0) || 0;
+  // material_grams is per-print, calculated in the hook
+  const totalMaterial = printLog.reduce((sum: number, p: EnrichedPrintLogEntry) => sum + p.material_used_grams, 0);
 
   // Prepare chart data
   const dailyData = Object.entries(metrics?.dailyProduction || {})
@@ -305,6 +303,7 @@ export default function AnalyticsPage() {
           )}
         </CardContent>
       </Card>
+
     </div>
   );
 }

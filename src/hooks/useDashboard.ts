@@ -120,6 +120,23 @@ export function useDashboardStats() {
   });
 }
 
+export interface EnrichedPrintLogEntry {
+  id: string;
+  part_id: string;
+  printer_id: string | null;
+  gcode_filename: string | null;
+  quantity_printed: number;
+  status: string;
+  source: string;
+  completed_at: string;
+  failure_reason: string | null;
+  notes: string | null;
+  part: { id: string; name: string; material_grams: number; parts_per_print: number; material_type: string } | null;
+  printer: { id: string; name: string } | null;
+  material_used_grams: number;
+  num_prints: number;
+}
+
 export function useProductionMetrics(days: number = 30) {
   const supabase = createClient();
 
@@ -137,35 +154,73 @@ export function useProductionMetrics(days: number = 30) {
 
       if (ordersError) throw ordersError;
 
-      // Get print history
-      const { data: printHistory, error: histError } = await supabase
-        .from('print_history')
-        .select('status, ended_at, material_used_grams, quantity')
-        .gte('created_at', startDate);
+      // Get inventory print log (new system) with part and printer data
+      const { data: printLog, error: logError } = await supabase
+        .from('inventory_print_log')
+        .select(`
+          *,
+          part:parts(id, name, material_grams, parts_per_print, material_type),
+          printer:printers(id, name)
+        `)
+        .gte('completed_at', startDate)
+        .order('completed_at', { ascending: false });
 
-      if (histError) throw histError;
+      if (logError) throw logError;
 
-      // Group by day for charts (sum quantities)
+      // Calculate material usage per log entry
+      // material_grams on Part is PER PRINT (not per part)
+      // So: material_used = (quantity_printed / parts_per_print) * material_grams
+      interface PrintLogEntry {
+        id: string;
+        part_id: string;
+        printer_id: string | null;
+        gcode_filename: string | null;
+        quantity_printed: number;
+        status: string;
+        source: string;
+        completed_at: string;
+        failure_reason: string | null;
+        notes: string | null;
+        part: { id: string; name: string; material_grams: number; parts_per_print: number; material_type: string } | null;
+        printer: { id: string; name: string } | null;
+      }
+
+      const enrichedLog: EnrichedPrintLogEntry[] = (printLog || []).map((entry: PrintLogEntry) => {
+        const partsPerPrint = entry.part?.parts_per_print || 1;
+        const materialPerPrint = entry.part?.material_grams || 0;
+        // For successful prints: number of prints = parts produced / parts_per_print
+        // For failed prints: assume 1 print attempt (material was used but no parts produced)
+        const numPrints = entry.status === 'success' && entry.quantity_printed > 0
+          ? entry.quantity_printed / partsPerPrint
+          : (entry.status === 'failed' ? 1 : 0);
+        const materialUsed = numPrints * materialPerPrint;
+
+        return {
+          ...entry,
+          material_used_grams: materialUsed,
+          num_prints: numPrints,
+        };
+      });
+
+      // Group by day for charts
       const dailyProduction: Record<string, { completed: number; failed: number; material: number }> = {};
 
-      printHistory?.forEach((print: { ended_at: string | null; status: string; material_used_grams: number | null; quantity: number | null }) => {
-        if (!print.ended_at) return;
-        const day = print.ended_at.split('T')[0];
+      for (const entry of enrichedLog) {
+        const day = entry.completed_at.split('T')[0];
         if (!dailyProduction[day]) {
           dailyProduction[day] = { completed: 0, failed: 0, material: 0 };
         }
-        const qty = print.quantity || 1;
-        if (print.status === 'success') {
-          dailyProduction[day].completed += qty;
-          dailyProduction[day].material += print.material_used_grams || 0;
+        if (entry.status === 'success') {
+          dailyProduction[day].completed += entry.num_prints;
         } else {
-          dailyProduction[day].failed += qty;
+          dailyProduction[day].failed += entry.num_prints;
         }
-      });
+        dailyProduction[day].material += entry.material_used_grams;
+      }
 
       return {
         completedOrders: completedOrders || [],
-        printHistory: printHistory || [],
+        printLog: enrichedLog,
         dailyProduction,
       };
     },
