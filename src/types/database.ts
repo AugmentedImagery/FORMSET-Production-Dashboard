@@ -262,6 +262,14 @@ export interface StockLevel {
   quantity: number;
 }
 
+export interface ProductionQueueItem {
+  id: string;
+  part: Part;
+  quantity_needed: number;
+  quantity_completed: number;
+  order_count: number;
+}
+
 export interface DashboardStats {
   pendingOrders: number;
   inProductionOrders: number;
@@ -270,7 +278,7 @@ export interface DashboardStats {
   lowStockParts: Part[];
   stockLevels: StockLevel[];
   recentOrders: ProductionOrder[];
-  activeJobs: PrintJob[];
+  productionQueue: ProductionQueueItem[];
 }
 
 // Form Input Types

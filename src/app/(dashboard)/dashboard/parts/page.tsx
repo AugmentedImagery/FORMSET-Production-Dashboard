@@ -593,8 +593,7 @@ function GcodeMappingsDialog({
               </Button>
             </div>
             <p className="text-xs text-gray-500">
-              Enter the gcode filename as it appears on your Bambu printer.
-              Partial matches are supported (e.g., &quot;planter_base&quot; will match &quot;planter_base_v2.gcode&quot;).
+              Enter the exact gcode filename as it appears on your Bambu printer (e.g., &quot;kiosk_plates_plate_3.3mf&quot;).
             </p>
           </div>
         </div>

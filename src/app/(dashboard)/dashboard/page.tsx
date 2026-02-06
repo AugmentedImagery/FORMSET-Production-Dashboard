@@ -113,7 +113,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: Production Queue + Recent Orders stacked */}
         <div className="lg:col-span-2 space-y-6">
-          <ProductionTimeline jobs={stats?.activeJobs || []} />
+          <ProductionTimeline items={stats?.productionQueue || []} />
           <RecentOrders orders={stats?.recentOrders || []} />
         </div>
         {/* Right column: Stock Levels */}
