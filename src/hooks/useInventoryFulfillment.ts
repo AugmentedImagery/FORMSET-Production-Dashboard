@@ -265,6 +265,83 @@ export function useLogInventoryPrint() {
 }
 
 /**
+ * Mark a print log entry as human-reviewed (sets source to 'manual') and optionally
+ * flip its status. Adjusts inventory if status changes. Used by the mobile tracker
+ * to let employees confirm or correct auto-tracked prints when they clear the bed.
+ */
+export function useReviewPrintLog() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      entry,
+      newStatus,
+    }: {
+      entry: {
+        id: string;
+        status: string;
+        quantity_printed: number;
+        part_id: string;
+        part?: { parts_per_print: number } | null;
+      };
+      newStatus: 'success' | 'failed';
+    }) => {
+      const supabase = createClient();
+      const partsPerPrint = entry.part?.parts_per_print || 1;
+
+      const updatePrintLog = async (patch: Record<string, unknown>) => {
+        const { data, error } = await supabase
+          .from('inventory_print_log')
+          .update(patch)
+          .eq('id', entry.id)
+          .select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) {
+          throw new Error(
+            'Print log update was rejected (no rows changed). Check RLS policies and your account role.'
+          );
+        }
+      };
+
+      // Adjust inventory only if status is changing
+      if (entry.status === 'success' && newStatus === 'failed') {
+        await updatePrintLog({ status: 'failed', quantity_printed: 0, source: 'manual' });
+        if (entry.quantity_printed > 0) {
+          const { error: rpcError } = await supabase.rpc('increment_inventory', {
+            p_part_id: entry.part_id,
+            p_quantity: -entry.quantity_printed,
+          });
+          if (rpcError) throw rpcError;
+        }
+      } else if (entry.status === 'failed' && newStatus === 'success') {
+        await updatePrintLog({
+          status: 'success',
+          quantity_printed: partsPerPrint,
+          source: 'manual',
+        });
+        const { error: rpcError } = await supabase.rpc('increment_inventory', {
+          p_part_id: entry.part_id,
+          p_quantity: partsPerPrint,
+        });
+        if (rpcError) throw rpcError;
+      } else {
+        // Same status — just flag as human-reviewed
+        await updatePrintLog({ source: 'manual' });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory_print_log'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['production_metrics'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['allocations'] });
+      queryClient.invalidateQueries({ queryKey: ['part_demand'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
+    },
+  });
+}
+
+/**
  * Update a print log entry's status (e.g., mark a success as failed).
  * Automatically adjusts inventory when changing status.
  */

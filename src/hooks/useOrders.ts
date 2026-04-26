@@ -179,54 +179,30 @@ export function useUpdateOrderStatus() {
 
       // If order is cancelled, release reserved inventory and update allocations
       if (status === 'cancelled') {
-        // Get allocations to release reserved inventory
-        const { data: allocations } = await supabase
+        const { data: allocations, error: allocFetchError } = await supabase
           .from('order_part_allocations')
           .select('part_id, quantity_allocated')
           .eq('production_order_id', id);
+        if (allocFetchError) throw allocFetchError;
 
-        // Release reserved inventory for each part
-        if (allocations) {
-          for (const alloc of allocations) {
-            if (alloc.quantity_allocated > 0) {
-              // Decrease reserved quantity
-              await supabase
-                .from('inventory')
-                .update({
-                  quantity_reserved: supabase.rpc('greatest', { a: 0, b: 'quantity_reserved' }) // Handled differently
-                })
-                .eq('part_id', alloc.part_id);
-
-              // Actually, use RPC for safety
-              await supabase.rpc('release_inventory_reservation', {
-                p_part_id: alloc.part_id,
-                p_quantity: alloc.quantity_allocated
-              }).catch(() => {
-                // RPC might not exist yet, do direct update
-                supabase
-                  .from('inventory')
-                  .select('quantity_reserved')
-                  .eq('part_id', alloc.part_id)
-                  .single()
-                  .then(({ data }: { data: { quantity_reserved: number } | null }) => {
-                    if (data) {
-                      const newReserved = Math.max(0, (data.quantity_reserved || 0) - alloc.quantity_allocated);
-                      supabase
-                        .from('inventory')
-                        .update({ quantity_reserved: newReserved })
-                        .eq('part_id', alloc.part_id);
-                    }
-                  });
-              });
-            }
+        // Release reserved inventory for each part via the RPC.
+        // The RPC clamps to >=0 in SQL, avoiding TOCTOU races.
+        for (const alloc of allocations || []) {
+          if (alloc.quantity_allocated > 0) {
+            const { error: rpcError } = await supabase.rpc('release_inventory_reservation', {
+              p_part_id: alloc.part_id,
+              p_quantity: alloc.quantity_allocated,
+            });
+            if (rpcError) throw rpcError;
           }
         }
 
-        // Update allocations status
-        await supabase
+        // Drop the allocation rows now that reservations are released
+        const { error: deleteError } = await supabase
           .from('order_part_allocations')
           .delete()
           .eq('production_order_id', id);
+        if (deleteError) throw deleteError;
 
         // Update print jobs to failed (backwards compatibility)
         const { error: jobsError } = await supabase
@@ -234,7 +210,6 @@ export function useUpdateOrderStatus() {
           .update({ status: 'failed' })
           .eq('production_order_id', id)
           .in('status', ['queued', 'printing']);
-
         if (jobsError) throw jobsError;
       }
 
