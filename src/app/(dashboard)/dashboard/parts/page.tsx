@@ -50,7 +50,6 @@ import {
   Clock,
   Scale,
   Layers,
-  Package,
   Edit,
   Loader2,
   Plus,
@@ -892,13 +891,6 @@ export default function PartsPage() {
     return `${hours}h ${mins}m`;
   };
 
-  const getStockStatus = (onHand: number, reserved: number, threshold: number) => {
-    const available = onHand - reserved;
-    if (available <= 0) return { label: 'Out of Stock', color: 'bg-orange-100 text-orange-700' };
-    if (available < threshold) return { label: 'Low Stock', color: 'bg-yellow-100 text-yellow-700' };
-    return { label: 'In Stock', color: 'bg-green-100 text-green-700' };
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -1108,13 +1100,6 @@ export default function PartsPage() {
                 </TableHead>
                 <TableHead>
                   <div className="flex items-center gap-1">
-                    <Package className="h-4 w-4" />
-                    Stock
-                  </div>
-                </TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>
-                  <div className="flex items-center gap-1">
                     <FileCode className="h-4 w-4" />
                     Gcode
                   </div>
@@ -1124,11 +1109,6 @@ export default function PartsPage() {
             </TableHeader>
             <TableBody>
               {filteredParts?.map((part) => {
-                const inventory = part.inventory;
-                const onHand = inventory?.quantity_on_hand || 0;
-                const reserved = inventory?.quantity_reserved || 0;
-                const status = getStockStatus(onHand, reserved, part.low_stock_threshold);
-
                 return (
                   <TableRow key={part.id}>
                     <TableCell>
@@ -1178,17 +1158,6 @@ export default function PartsPage() {
                     </TableCell>
                     <TableCell className="text-center font-medium">
                       {part.parts_per_print}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="font-medium">{onHand - reserved} available</div>
-                        <div className="text-gray-500">{reserved} reserved</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={status.color} variant="secondary">
-                        {status.label}
-                      </Badge>
                     </TableCell>
                     <TableCell>
                       {(() => {
