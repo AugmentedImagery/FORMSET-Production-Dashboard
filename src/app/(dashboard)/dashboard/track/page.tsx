@@ -128,6 +128,7 @@ export default function TrackPage() {
     let successCount = 0;
     let failureCount = 0;
 
+    let lastError: unknown = null;
     for (const entry of pending.entries) {
       try {
         await review.mutateAsync({
@@ -141,11 +142,16 @@ export default function TrackPage() {
           newStatus: pending.newStatus,
         });
         successCount++;
-      } catch {
+      } catch (err) {
         failureCount++;
+        lastError = err;
+        console.error('Review print failed', err);
       }
     }
     setBulkRunning(false);
+
+    const errMsg =
+      lastError instanceof Error ? lastError.message : 'Unknown error';
 
     if (failureCount === 0) {
       toast.success(
@@ -156,9 +162,9 @@ export default function TrackPage() {
           : `Updated ${successCount} prints as ${pending.newStatus}`
       );
     } else if (successCount > 0) {
-      toast.error(`Updated ${successCount}, ${failureCount} failed to update`);
+      toast.error(`Updated ${successCount}, ${failureCount} failed: ${errMsg}`);
     } else {
-      toast.error('Failed to update prints');
+      toast.error(`Failed to update prints: ${errMsg}`);
     }
 
     setPending(null);
@@ -667,8 +673,10 @@ function LogPrintForPart({ part, onClose }: LogPrintForPartProps) {
           : `Logged failed print for ${part.name}`
       );
       handleClose();
-    } catch {
-      toast.error('Failed to log print');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to log print: ${msg}`);
+      console.error('Log print failed', err);
     }
   };
 
